@@ -660,7 +660,7 @@ function renderWeeklyReport(r) {
         { header: 'Units', key: 'units', render: (x) => indFmt(x.units) },
         { header: 'Items/min', key: 'avgItemsPerMin' },
         { header: 'Units/min', key: 'avgUnitsPerMin' },
-      ], { rank: true })}
+      ], { rank: true, noSplit: true })}
       ${r.stations.length > 0 ? `
         <h2 class="wk-h2">Station units - this week</h2>
         <p class="wk-sec-note">Stations group 5 scanners each (Station 1 = Scanners 1–5, and so on). Total units scanned by each station this week.</p>
@@ -759,7 +759,7 @@ function renderWeeklyReport(r) {
         { header: 'Days', key: 'days' },
         { header: 'Items/min', key: 'itemsPerMin' },
         { header: 'Units/min', key: 'unitsPerMin' },
-      ], { rank: true })}
+      ], { rank: true, noSplit: true })}
       <h2 class="wk-h2">Highest weekly volume</h2>
       <p class="wk-sec-note">Ranked by total lines checked this week. MRP and active scan time together show how much value each checker handled and how long it actually took them.</p>
       ${wkTable(r.highestVolumeCheckers, [
