@@ -208,12 +208,12 @@ function renderReport(r) {
     <p class="subtitle">Operational scanning performance across ${r.summary.picklists} picklists on ${esc(r.reportDate)}.</p>
 
     <div class="stats">
+      <div class="stat"><div class="v">${r.summary.totalUnits.toLocaleString()}</div><div class="l">TOTAL UNITS</div></div>
       <div class="stat"><div class="v">${r.summary.picklists}</div><div class="l">PICKLISTS</div></div>
       <div class="stat"><div class="v">${r.summary.lineItems}</div><div class="l">LINE ITEMS</div></div>
-      <div class="stat"><div class="v">${r.summary.totalUnits.toLocaleString()}</div><div class="l">TOTAL UNITS</div></div>
-      <div class="stat"><div class="v">${esc(r.summary.activeScanTime)}</div><div class="l">ACTIVE SCAN TIME</div></div>
-      <div class="stat"><div class="v">${r.summary.itemsPerMin} /min</div><div class="l">LINE ITEMS / MIN</div></div>
       <div class="stat"><div class="v">${r.summary.unitsPerMin} /min</div><div class="l">UNITS / MIN</div></div>
+      <div class="stat"><div class="v">${r.summary.itemsPerMin} /min</div><div class="l">LINE ITEMS / MIN</div></div>
+      <div class="stat"><div class="v">${esc(r.summary.activeScanTime)}</div><div class="l">ACTIVE SCAN TIME</div></div>
     </div>
 
     <ul class="bullets">
