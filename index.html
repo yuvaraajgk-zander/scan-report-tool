@@ -19,7 +19,9 @@
   *{box-sizing:border-box}
   body{background:var(--page);color:var(--ink);font-family:'Public Sans',system-ui,sans-serif;margin:0;padding:28px 20px 80px}
 
-  .toolbar{max-width:880px;margin:0 auto 20px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:0 1px 3px rgba(27,42,74,.08)}
+  .toolbar{max-width:880px;margin:0 auto 20px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 18px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 3px rgba(27,42,74,.08)}
+  .toolbar-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .toolbar-divider{height:1px;background:var(--line);margin:0 -18px}
   .toolbar label{font-size:12px;color:var(--muted);font-weight:600}
   .toolbar input[type=text]{font-family:inherit;font-size:13.5px;padding:7px 10px;border:1px solid var(--line);border-radius:6px;width:130px}
   .toolbar select{font-family:inherit;font-size:13.5px;padding:7px 10px;border:1px solid var(--line);border-radius:6px}
@@ -138,25 +140,29 @@
 <body>
 
   <div class="toolbar">
-    <label for="reportMode">Report</label>
-    <select id="reportMode">
-      <option value="daily">Daily</option>
-      <option value="weekly">Weekly</option>
-    </select>
-    <label for="fetchContainer">Container</label>
-    <input type="text" id="fetchContainer" placeholder="zander-postgres" style="width:120px" />
-    <label for="fetchSchema">Schema</label>
-    <input type="text" id="fetchSchema" placeholder="palepumyp" style="width:100px" />
-    <label for="fetchDate">Date</label>
-    <input type="text" id="fetchDate" placeholder="DD-MM-YYYY" />
-    <button class="btn" id="fetchData">Get Data</button>
-    <span style="color:var(--line)">|</span>
-    <label for="csvFile" class="btn secondary" style="margin:0">Open CSV</label>
-    <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none" />
-    <span id="fileName" style="font-size:12.5px;color:var(--muted)"></span>
-    <button class="btn" id="download" disabled>Download PDF</button>
-    <button class="btn secondary" id="downloadDocx" disabled>Download DOCX</button>
-    <span class="status" id="status"></span>
+    <div class="toolbar-row">
+      <label for="reportMode">Report</label>
+      <select id="reportMode">
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+      </select>
+      <label for="fetchContainer">Container</label>
+      <input type="text" id="fetchContainer" placeholder="zander-postgres" style="width:120px" />
+      <label for="fetchSchema">Schema</label>
+      <input type="text" id="fetchSchema" placeholder="palepumyp" style="width:100px" />
+      <label for="fetchDate">Date</label>
+      <input type="text" id="fetchDate" placeholder="DD-MM-YYYY" />
+      <button class="btn" id="fetchData">Get Data</button>
+    </div>
+    <div class="toolbar-divider"></div>
+    <div class="toolbar-row">
+      <label for="csvFile" class="btn secondary" style="margin:0">Open CSV</label>
+      <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none" />
+      <span id="fileName" style="font-size:12.5px;color:var(--muted)"></span>
+      <button class="btn" id="download" disabled>Download PDF</button>
+      <button class="btn secondary" id="downloadDocx" disabled>Download DOCX</button>
+      <span class="status" id="status"></span>
+    </div>
   </div>
   <p class="edit-hint" id="editHint" style="display:none">Click any value or label in the report below to edit it directly — your edits are included in the downloaded PDF.</p>
 
