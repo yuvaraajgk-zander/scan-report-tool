@@ -143,6 +143,10 @@
       <option value="daily">Daily</option>
       <option value="weekly">Weekly</option>
     </select>
+    <label for="fetchContainer">Container</label>
+    <input type="text" id="fetchContainer" placeholder="zander-postgres" style="width:120px" />
+    <label for="fetchSchema">Schema</label>
+    <input type="text" id="fetchSchema" placeholder="palepumyp" style="width:100px" />
     <label for="fetchDate">Date</label>
     <input type="text" id="fetchDate" placeholder="DD-MM-YYYY" />
     <button class="btn" id="fetchData">Get Data</button>
@@ -377,77 +381,76 @@ function parseReportCsv(text) {
   };
 }
 
+// Matches weekly_report_generator.sh's own "SECTION,<name>" CSV output
+// (scripts/weekly_report_generator.sh) - column headers here are copied
+// verbatim from that script's SQL column aliases.
 const WK_TABLE_SECTIONS = {
-  DAYS_RANKED: {
-    target: 'daysRankedByLines',
-    map: { Date: 'date', Trays: 'trays', Lines: 'lines', Units: 'units', Checkers: 'checkers', MRP: 'mrp' },
-    numeric: ['trays', 'lines', 'units', 'checkers', 'mrp'],
-  },
-  SCANNERS: {
-    target: 'fastestScanners',
+  DAILY_SUMMARY: {
+    target: 'dailySummary',
     map: {
-      'Scanner name': 'scannerName', 'Checkers operated': 'checkersOperated', Lines: 'lines', Units: 'units',
-      'Avg items/min': 'avgItemsPerMin', 'Avg units/min': 'avgUnitsPerMin',
-      'Peak items/min': 'peakItemsPerMin', 'Peak units/min': 'peakUnitsPerMin', MRP: 'mrp',
+      Date: 'date', Trays: 'trays', 'Total Units': 'totalUnits', 'Total Lines': 'totalLines',
+      'Value (Rs)': 'valueRs', 'Net Units per Min': 'netUnitsPerMin', 'Net Min': 'netMin', 'Items per Min': 'itemsPerMin',
     },
-    numeric: ['lines', 'units', 'avgItemsPerMin', 'avgUnitsPerMin', 'peakItemsPerMin', 'peakUnitsPerMin', 'mrp'],
+    numeric: ['trays', 'totalUnits', 'totalLines', 'valueRs', 'netUnitsPerMin', 'netMin', 'itemsPerMin'],
   },
-  STATIONS: {
-    target: 'stations',
-    map: { Station: 'station', Lines: 'lines', Units: 'units' },
-    numeric: ['station', 'lines', 'units'],
-  },
-  TOP_PICKLISTS: {
-    target: 'topPicklists',
+  TIME_AND_SPEED_BY_CHECKER: {
+    target: 'timeAndSpeedByChecker',
     map: {
-      Picklist: 'picklistNumber', Lines: 'lines', Units: 'units',
-      'Items/min': 'itemsPerMin', 'Units/min': 'unitsPerMin', Score: 'score',
+      'Checker Name': 'checkerName', Trays: 'trays', 'Line Items': 'lineItems',
+      'Net Units per Min': 'netUnitsPerMin', 'Net Min': 'netMin', 'Items per Min': 'itemsPerMin',
     },
-    numeric: ['lines', 'units', 'itemsPerMin', 'unitsPerMin', 'score'],
+    numeric: ['trays', 'lineItems', 'netUnitsPerMin', 'netMin', 'itemsPerMin'],
   },
-  TOP_LINES_DAYS: {
-    target: 'topLinesDays',
-    map: { Date: 'date', Checker: 'checkerName', Lines: 'lines', Units: 'units' },
-    numeric: ['lines', 'units'],
+  AVG_TIME_BY_FLOW: {
+    target: 'avgTimeByFlow',
+    map: { 'Scan Flow Status': 'scanFlowStatus', 'Count (n)': 'count', 'Avg Time (sec)': 'avgTimeSec' },
+    numeric: ['count', 'avgTimeSec'],
   },
-  TOP_UNITS_DAYS: {
-    target: 'topUnitsDays',
-    map: { Date: 'date', Checker: 'checkerName', Lines: 'lines', Units: 'units' },
-    numeric: ['lines', 'units'],
+  TOP_PRODUCTS_BY_VOLUME: {
+    target: 'topProducts',
+    map: { Product: 'product', Lines: 'lines', 'Total Units': 'totalUnits', 'Value (Rs)': 'valueRs' },
+    numeric: ['lines', 'totalUnits', 'valueRs'],
   },
-  BENCH: {
-    target: 'bench',
+  HOURLY_ACTIVITY_PROFILE: {
+    target: 'hourlyActivity',
     map: {
-      Bench: 'label', 'Total lines': 'lines', 'Avg lines/checker/day': 'avgLinesPerDay',
-      'Total units': 'units', 'Avg units/checker/day': 'avgUnitsPerDay', 'Share of lines': 'shareOfLines',
+      'Time Slot': 'timeSlot', 'Total Items': 'totalItems', 'Avg Items per Day': 'avgItemsPerDay',
+      'Peak Single Day': 'peakSingleDay', 'Peak Date': 'peakDate',
     },
-    numeric: ['lines', 'avgLinesPerDay', 'units', 'avgUnitsPerDay'],
+    numeric: ['totalItems', 'avgItemsPerDay', 'peakSingleDay'],
   },
-  FASTEST_CHECKERS: {
-    target: 'fastestCheckers',
-    map: { Checker: 'checkerName', Days: 'days', 'Items/min': 'itemsPerMin', 'Units/min': 'unitsPerMin' },
-    numeric: ['days', 'itemsPerMin', 'unitsPerMin'],
-  },
-  HIGHEST_VOLUME_CHECKERS: {
-    target: 'highestVolumeCheckers',
+  BEST_DAY_CHECKERS: {
+    target: 'bestDayCheckers',
     map: {
-      Checker: 'checkerName', Days: 'days', Lines: 'lines', Units: 'units',
-      'Lines/day': 'linesPerDay', MRP: 'mrp', 'Active scan time': 'activeScanTime',
+      'Checker Name': 'checkerName', Trays: 'trays', 'Line Items': 'lineItems',
+      'Net Units per Min': 'netUnitsPerMin', 'Net Min': 'netMin', 'Items per Min': 'itemsPerMin',
     },
-    numeric: ['days', 'lines', 'units', 'linesPerDay', 'mrp'],
+    numeric: ['trays', 'lineItems', 'netUnitsPerMin', 'netMin', 'itemsPerMin'],
+  },
+  WEEKLY_SUMMARY: {
+    target: 'weeklySummary',
+    map: {
+      'Week Starting': 'weekStarting', 'Week Ending': 'weekEnding', Trays: 'trays', 'Total Units': 'totalUnits',
+      'Total Lines': 'totalLines', 'Value (Rs)': 'valueRs', 'Net Units per Min': 'netUnitsPerMin',
+      'Net Min': 'netMin', 'Items per Min': 'itemsPerMin',
+    },
+    numeric: ['trays', 'totalUnits', 'totalLines', 'valueRs', 'netUnitsPerMin', 'netMin', 'itemsPerMin'],
+  },
+  SCANNER_WISE_UNITS: {
+    target: 'scannerWiseUnits',
+    map: { Scanner: 'scanner', Trays: 'trays', 'Units Completed': 'unitsCompleted', Lines: 'lines', 'Net Min': 'netMin', 'Units per Min': 'unitsPerMin' },
+    numeric: ['trays', 'unitsCompleted', 'lines', 'netMin', 'unitsPerMin'],
   },
 };
-const WK_STRING_KV = new Set([
-  'reportDate', 'schema', 'weekStart', 'weekEnd', 'highestItemsPicklist', 'highestUnitsPicklist',
-  'operatingWindowOpen', 'operatingWindowClose', 'date', 'bestLineDayDate', 'bestLineDayChecker',
-  'bestUnitDayDate', 'bestUnitDayChecker',
-]);
+const WK_STRING_KV = new Set(['schema', 'weekStart', 'weekEnd', 'reportDate', 'bestDay']);
 
-// Rebuilds the same shape server.js's buildWeeklyReport() returns, from
-// the "SECTION,<name>" CSV reportToWeeklyCsv() wrote.
+// Rebuilds a JS object from the "SECTION,<name>" CSV weekly_report_generator.sh
+// writes: META/SUMMARY/BEST_DAY_SUMMARY are key/value blocks, the rest are
+// tables (see WK_TABLE_SECTIONS). No metric here is recomputed from the raw
+// data - every number is copied straight from the script's own columns.
 function parseWeeklyReportCsv(text) {
   const lines = text.split(/\r\n|\n/).filter((l) => l.length > 0);
-  const meta = {}, summary = {}, highestDay = {}, checkerSummary = {}, coverage = {};
+  const meta = {}, summary = {}, bestDaySummary = {};
   const tables = {};
   for (const key of Object.keys(WK_TABLE_SECTIONS)) tables[WK_TABLE_SECTIONS[key].target] = [];
 
@@ -471,31 +474,23 @@ function parseWeeklyReportCsv(text) {
 
     if (fields[0] === 'key' && fields[1] === 'value') continue;
     const [key, value] = fields;
-    const kvTarget = { META: meta, SUMMARY: summary, HIGHEST_DAY: highestDay, CHECKER_SUMMARY: checkerSummary, COVERAGE: coverage }[section];
+    const kvTarget = { META: meta, SUMMARY: summary, BEST_DAY_SUMMARY: bestDaySummary }[section];
     if (kvTarget) kvTarget[key] = WK_STRING_KV.has(key) ? value : Number(value);
   }
 
-  if (!meta.weekStart) throw new Error('This file doesn\'t look like a weekly scan report CSV.');
+  if (!meta.weekStart && tables.dailySummary.length === 0) {
+    throw new Error('This file doesn\'t look like a weekly scan report CSV.');
+  }
 
   return {
-    reportDate: meta.reportDate,
-    schema: meta.schema,
-    weekStart: meta.weekStart,
-    weekEnd: meta.weekEnd,
+    schema: meta.schema || '',
+    reportDate: meta.reportDate || '',
+    weekStart: meta.weekStart || (tables.dailySummary[0] || {}).date || '',
+    weekEnd: meta.weekEnd || (tables.dailySummary[tables.dailySummary.length - 1] || {}).date || '',
     summary,
-    highestDay: highestDay.date ? highestDay : null,
+    bestDay: bestDaySummary.bestDay ? bestDaySummary : null,
+    operatingDays: tables.dailySummary.length,
     ...tables,
-    checkerSummary: {
-      checkersSeen: checkerSummary.checkersSeen,
-      presentAllDays: checkerSummary.presentAllDays,
-      avgLinesPerCheckerDay: checkerSummary.avgLinesPerCheckerDay,
-      avgUnitsPerCheckerDay: checkerSummary.avgUnitsPerCheckerDay,
-      bestLineDayChecker: checkerSummary.bestLineDayChecker
-        ? { date: checkerSummary.bestLineDayDate, checkerName: checkerSummary.bestLineDayChecker, lines: checkerSummary.bestLineDayLines } : null,
-      bestUnitDayChecker: checkerSummary.bestUnitDayChecker
-        ? { date: checkerSummary.bestUnitDayDate, checkerName: checkerSummary.bestUnitDayChecker, units: checkerSummary.bestUnitDayUnits } : null,
-    },
-    coverage,
   };
 }
 
@@ -570,207 +565,219 @@ function wkHeader(r) {
 function renderWeeklyReport(r) {
   const s = r.summary;
   const weekLabel = `${fmtDayShort(r.weekStart)} – ${fmtDayShort(r.weekEnd)}`;
-  const daysByDate = [...r.daysRankedByLines].sort((a, b) => a.date.localeCompare(b.date));
-  const maxDayLines = Math.max(1, ...daysByDate.map((d) => d.lines));
+  const daily = r.dailySummary;
+  const totalUnits = s.unitsBilled || 0;
+  const totalValueMRP = s.totalValueMRP || 0;
+  const completedTrays = s.completedTrays || 0;
+  const totalLines = daily.reduce((a, d) => a + d.totalLines, 0);
+  const totalNetMin = daily.reduce((a, d) => a + d.netMin, 0);
+  const unitsPerMin = totalNetMin > 0 ? +(totalUnits / totalNetMin).toFixed(2) : 0;
+  const itemsPerMin = totalNetMin > 0 ? +(totalLines / totalNetMin).toFixed(2) : 0;
+  const highestUnitsDay = daily.reduce((best, d) => (!best || d.totalUnits > best.totalUnits ? d : best), null);
+  const highestLinesDay = daily.reduce((best, d) => (!best || d.totalLines > best.totalLines ? d : best), null);
+  const lightestDay = daily.reduce((worst, d) => (!worst || d.totalLines < worst.totalLines ? d : worst), null);
+  const rangeDays = r.weekStart && r.weekEnd
+    ? Math.round((new Date(`${r.weekEnd}T00:00:00Z`) - new Date(`${r.weekStart}T00:00:00Z`)) / 86400000) + 1 : daily.length;
+  const idleDays = Math.max(0, rangeDays - daily.length);
+  const topLineDays = [...daily].sort((a, b) => b.totalLines - a.totalLines).slice(0, 5);
+  const maxTopLines = Math.max(1, ...topLineDays.map((d) => d.totalLines));
 
   let out = '';
 
-  // ===== Page 1: Weekly Overview =====
+  // ===== Page 1: Weekly overview =====
   out += `<div class="wk-page">
     ${wkHeader(r)}
-    <div class="wk-eyebrow">OPERATIONS REPORT · WEEKLY</div>
-    <h1 class="wk-h1">Weekly Scan Report for ${esc(r.schema)} - ${weekLabel}</h1>
-    <p class="wk-subtitle">Outbound checking across all picklists this week.${r.highestDay ? ` Highest day is <b>${indFmt(r.highestDay.lines)} lines</b> on <b>${fmtDayShort(r.highestDay.date)}</b>,` : ''} across ${s.operationalDays} operational day(s).</p>
+    <div class="wk-eyebrow">OPERATIONS REPORT · ${esc((r.schema || '').toUpperCase())}</div>
+    <h1 class="wk-h1">${esc(r.schema)} — ${weekLabel}</h1>
+    <p class="wk-subtitle">Outbound checking on completed trays, ${weekLabel}. ${daily.length} of ${rangeDays} day(s) have completed trays${idleDays > 0 ? ` (${idleDays} day(s) had none)` : ''}.${highestLinesDay ? ` Highest line day is <b>${indFmt(highestLinesDay.totalLines)} lines</b> on <b>${fmtDayShort(highestLinesDay.date)}</b>.` : ''} Units are ordered units, not scanned units.</p>
     <div class="wk-kpis n4">
-      <div class="wk-kpi"><div class="v">${r.highestDay ? indFmt(r.highestDay.lines) : '-'}</div><div class="l">Highest day's lines</div><div class="s">${r.highestDay ? fmtDayShort(r.highestDay.date) : ''}</div></div>
-      <div class="wk-kpi"><div class="v">${indFmt(s.avgLinesPerDay)}</div><div class="l">Average lines / day</div><div class="s">${s.operationalDays} operating days</div></div>
-      <div class="wk-kpi"><div class="v">${r.highestDay ? indFmt(r.highestDay.units) : '-'}</div><div class="l">Highest day's units</div><div class="s">${r.highestDay ? fmtDayShort(r.highestDay.date) : ''}</div></div>
-      <div class="wk-kpi"><div class="v">${indFmt(s.avgUnitsPerDay)}</div><div class="l">Average units / day</div><div class="s">${s.operationalDays} operating days</div></div>
-    </div>
-    <div class="wk-kpis n2">
-      <div class="wk-kpi"><div class="v">${s.highestItemsPerMin}</div><div class="l">Highest lines / min</div><div class="s">Single fastest picklist${s.highestItemsPicklist ? ', GP ' + esc(s.highestItemsPicklist) : ''}</div></div>
-      <div class="wk-kpi"><div class="v">${s.highestUnitsPerMin}</div><div class="l">Highest units / min</div><div class="s">Single fastest picklist${s.highestUnitsPicklist ? ', GP ' + esc(s.highestUnitsPicklist) : ''}</div></div>
+      <div class="wk-kpi"><div class="v">${indFmt(totalUnits)}</div><div class="l">Total units processed</div><div class="s">${daily.length ? indFmt(Math.round(totalUnits / daily.length)) + ' a day' : ''}</div></div>
+      <div class="wk-kpi"><div class="v">${indFmt(totalLines)}</div><div class="l">Total lines</div><div class="s">${daily.length ? indFmt(Math.round(totalLines / daily.length)) + ' a day' : ''}</div></div>
+      <div class="wk-kpi"><div class="v">${highestUnitsDay ? indFmt(highestUnitsDay.totalUnits) : '-'}</div><div class="l">Highest units processed</div><div class="s">${highestUnitsDay ? fmtDayShort(highestUnitsDay.date) : ''}</div></div>
+      <div class="wk-kpi"><div class="v">${crFmt(totalValueMRP)}</div><div class="l">Bill value</div><div class="s">${daily.length ? crFmt(totalValueMRP / daily.length) + ' / day' : ''}</div></div>
     </div>
     <div class="wk-stats">
-      <div class="wk-stat"><div class="v">${s.operationalDays}</div><div class="l">Operational days</div></div>
-      <div class="wk-stat"><div class="v">${lakhFmt(s.totalLines)}</div><div class="l">Lines this week</div><div class="s">${indFmt(s.totalLines)}</div></div>
-      <div class="wk-stat"><div class="v">${lakhFmt(s.totalUnits)}</div><div class="l">Units this week</div><div class="s">${indFmt(s.totalUnits)}</div></div>
-      <div class="wk-stat"><div class="v">${crFmt(s.totalMrp)}</div><div class="l">MRP value</div></div>
+      <div class="wk-stat"><div class="v">${daily.length}</div><div class="l">Operating days</div><div class="s">Days with completed trays</div></div>
+      <div class="wk-stat"><div class="v">${indFmt(completedTrays)}</div><div class="l">Trays completed</div><div class="s">${daily.length ? indFmt(Math.round(completedTrays / daily.length)) + ' a day' : ''}</div></div>
+      <div class="wk-stat"><div class="v">${unitsPerMin}</div><div class="l">Units / min</div><div class="s">Units processed ÷ net minutes</div></div>
+      <div class="wk-stat"><div class="v">${itemsPerMin}</div><div class="l">Items / min</div><div class="s">Total lines ÷ net minutes</div></div>
     </div>
-    <div class="wk-stats">
-      <div class="wk-stat"><div class="v">${s.avgCheckersPerDay}</div><div class="l">Avg checkers on floor</div></div>
-      <div class="wk-stat"><div class="v">${s.activeScanners}</div><div class="l">Active scanners</div></div>
-      <div class="wk-stat"><div class="v">${indFmt(s.totalTrays)}</div><div class="l">Trays / GPs</div></div>
-      <div class="wk-stat"><div class="v">${s.avgLinesPerTray}</div><div class="l">Avg lines / tray</div><div class="s">${s.avgUnitsPerTray} units / tray</div></div>
-    </div>
-    <h2 class="wk-h2">Daily line-item volume</h2>
-    <p class="wk-sec-note">All ${daysByDate.length} operating day(s) this week. Number on each bar is lines checked that day.</p>
+    <h2 class="wk-h2">Top ${topLineDays.length} line days</h2>
+    <p class="wk-sec-note">Highest line days first. Number on each bar is total lines that day; the line under the date is units processed.</p>
     <div class="wk-chart"><div class="wk-bars">
-      ${daysByDate.map((d) => `<div class="wk-bar-col"><div class="wk-bar-num">${indFmt(d.lines)}</div><div class="wk-bar${d.lines === maxDayLines ? ' peak' : ''}" style="height:${Math.round((d.lines / maxDayLines) * 100)}%"></div><div class="wk-bar-label">${fmtDayShort(d.date)}</div><div class="wk-bar-sub">${indFmt(d.units)} u</div></div>`).join('')}
+      ${topLineDays.map((d) => `<div class="wk-bar-col"><div class="wk-bar-num">${indFmt(d.totalLines)}</div><div class="wk-bar${d.totalLines === maxTopLines ? ' peak' : ''}" style="height:${Math.round((d.totalLines / maxTopLines) * 100)}%"></div><div class="wk-bar-label">${fmtDayShort(d.date)}</div><div class="wk-bar-sub">${indFmt(d.totalUnits)} u</div></div>`).join('')}
     </div></div>
-    <h2 class="wk-h2">Days ranked by lines</h2>
-    ${wkTable(r.daysRankedByLines, [
-      { header: 'Day', key: 'date', cls: 'wk-name', render: (d) => fmtDayShort(d.date) },
-      { header: 'Trays', key: 'trays', render: (d) => indFmt(d.trays) },
-      { header: 'Lines', key: 'lines', render: (d) => indFmt(d.lines) },
-      { header: 'Units', key: 'units', render: (d) => indFmt(d.units) },
-    ], { rank: true })}
+    <div class="wk-split">
+      <div class="wk-box">
+        <div class="wk-box-title">QUICK INSIGHTS</div>
+        <ul class="bullets">
+          ${highestLinesDay ? `<li>Peak line day is <b>${fmtDayShort(highestLinesDay.date)}</b> at <b>${indFmt(highestLinesDay.totalLines)} lines</b> (${indFmt(highestLinesDay.trays)} trays).${lightestDay && lightestDay.date !== highestLinesDay.date ? ` Lightest operating day is <b>${fmtDayShort(lightestDay.date)}</b> at ${indFmt(lightestDay.totalLines)} lines.` : ''}</li>` : ''}
+          <li>Units processed total <b>${indFmt(totalUnits)}</b>.${highestUnitsDay ? ` Highest day is ${fmtDayShort(highestUnitsDay.date)} at ${indFmt(highestUnitsDay.totalUnits)} units.` : ''}</li>
+          <li>Pace is <b>${unitsPerMin} units/min</b> and <b>${itemsPerMin} items/min</b>, from total units and total lines over net scan minutes.</li>
+          ${idleDays > 0 ? `<li><b>${idleDays} day(s) had zero completed trays</b> in this range — excluded from daily averages.</li>` : ''}
+        </ul>
+      </div>
+      <div class="wk-box">
+        <div class="wk-box-title">FLOOR CLOCK</div>
+        <div class="wk-kv"><span class="l">Operating days with completed trays</span><span class="v">${daily.length}</span></div>
+        <div class="wk-kv"><span class="l">Avg trays / day</span><span class="v">${daily.length ? indFmt(Math.round(completedTrays / daily.length)) : 0}</span></div>
+        <div class="wk-kv"><span class="l">Avg lines / day</span><span class="v">${daily.length ? indFmt(Math.round(totalLines / daily.length)) : 0}</span></div>
+        <div class="wk-kv"><span class="l">Avg units processed / day</span><span class="v">${daily.length ? indFmt(Math.round(totalUnits / daily.length)) : 0}</span></div>
+        <div class="wk-kv"><span class="l">Items / min</span><span class="v">${itemsPerMin}</span></div>
+        <div class="wk-kv"><span class="l">Units / min</span><span class="v">${unitsPerMin}</span></div>
+        <div class="wk-kv"><span class="l">Avg bill value / day</span><span class="v">${daily.length ? crFmt(totalValueMRP / daily.length) : '₹0'}</span></div>
+      </div>
+    </div>
   </div>`;
 
-  // ===== Page 2: Highest Day drill-down =====
-  if (r.highestDay) {
-    const hd = r.highestDay;
-    const perChecker = hd.checkers > 0 ? Math.round(hd.lines / hd.checkers) : 0;
-    const unitsPerChecker = hd.checkers > 0 ? Math.round(hd.units / hd.checkers) : 0;
+  // ===== Page 2: Daily + Weekly summary =====
+  out += `<div class="wk-page">
+    ${wkHeader(r)}
+    <div class="wk-eyebrow">SCANNER SPEED · ${esc(weekLabel.toUpperCase())}</div>
+    <h1 class="wk-h1">Scanner based metrics</h1>
+    <p class="wk-subtitle">One row per day with completed trays. Units processed are ordered units; Units/min is units processed ÷ net minutes; Items/min is total lines ÷ net minutes.</p>
+    ${wkTable(daily, [
+      { header: 'Date', key: 'date', cls: 'wk-name', render: (d) => fmtDayShort(d.date) },
+      { header: 'Trays', render: (d) => indFmt(d.trays) },
+      { header: 'Lines', render: (d) => indFmt(d.totalLines) },
+      { header: 'Units processed', render: (d) => indFmt(d.totalUnits) },
+      { header: 'Bill value', render: (d) => crFmt(d.valueRs) },
+      { header: 'Units/min', render: (d) => d.netUnitsPerMin },
+      { header: 'Items/min', render: (d) => d.itemsPerMin },
+    ], { noSplit: true })}
+    <h2 class="wk-h2">Weekly summary</h2>
+    <p class="wk-sec-note">Same daily fetch and formulas, aggregated directly by the database per calendar week instead of per day.</p>
+    ${wkTable(r.weeklySummary, [
+      { header: 'Week starting', render: (w) => fmtDayShort(w.weekStarting) },
+      { header: 'Week ending', render: (w) => fmtDayShort(w.weekEnding) },
+      { header: 'Trays', render: (w) => indFmt(w.trays) },
+      { header: 'Total units', render: (w) => indFmt(w.totalUnits) },
+      { header: 'Total lines', render: (w) => indFmt(w.totalLines) },
+      { header: 'Value', render: (w) => crFmt(w.valueRs) },
+      { header: 'Units/min', render: (w) => w.netUnitsPerMin },
+      { header: 'Items/min', render: (w) => w.itemsPerMin },
+    ], { noSplit: true })}
+  </div>`;
+
+  // ===== Page 3: Time and speed by checker =====
+  if (r.timeAndSpeedByChecker.length > 0) {
+    const top = r.timeAndSpeedByChecker[0];
+    const mostTrays = r.timeAndSpeedByChecker.reduce((best, c) => (!best || c.trays > best.trays ? c : best), null);
     out += `<div class="wk-page">
       ${wkHeader(r)}
-      <div class="wk-eyebrow">HIGHEST DAY · ${esc(fmtDayShort(hd.date))} · WEEKLY</div>
-      <h1 class="wk-h1">Highest line day - ${fmtDayShort(hd.date)}</h1>
-      <p class="wk-subtitle">${fmtDayShort(hd.date)} was the highest line-item day this week, with <b>${hd.checkers} checker(s)</b> on the floor across <b>${indFmt(hd.trays)} tray(s)</b>.</p>
-      <div class="wk-kpis n4">
-        <div class="wk-kpi"><div class="v">${indFmt(hd.lines)}</div><div class="l">${fmtDayShort(hd.date)}'s lines</div></div>
-        <div class="wk-kpi"><div class="v">${indFmt(hd.units)}</div><div class="l">${fmtDayShort(hd.date)}'s units</div></div>
-        <div class="wk-kpi"><div class="v">${hd.checkers}</div><div class="l">Checkers on floor</div></div>
-        <div class="wk-kpi"><div class="v">${indFmt(hd.trays)}</div><div class="l">Trays / GPs</div></div>
-      </div>
-      <div class="wk-stats n3">
-        <div class="wk-stat"><div class="v">${indFmt(perChecker)}</div><div class="l">Lines / checker</div></div>
-        <div class="wk-stat"><div class="v">${indFmt(unitsPerChecker)}</div><div class="l">Units / checker</div></div>
-        <div class="wk-stat"><div class="v">${crFmt(hd.mrp)}</div><div class="l">${fmtDayShort(hd.date)}'s MRP</div></div>
-      </div>
+      <div class="wk-eyebrow">CHECKERS · TIME AND SPEED</div>
+      <h1 class="wk-h1">Time and speed by checker</h1>
+      <p class="wk-subtitle">Net minutes summed on each checker's completed trays (idle time already subtracted). Top 20 of ${r.timeAndSpeedByChecker.length} checkers with tray time, by line items.</p>
+      ${wkTable(r.timeAndSpeedByChecker.slice(0, 20), [
+        { header: 'Checker', key: 'checkerName', cls: 'wk-name' },
+        { header: 'Trays', render: (c) => indFmt(c.trays) },
+        { header: 'Net min', render: (c) => c.netMin },
+        { header: 'Line items', render: (c) => indFmt(c.lineItems) },
+        { header: 'Units/min', render: (c) => c.netUnitsPerMin },
+        { header: 'Items/min', render: (c) => c.itemsPerMin },
+      ], { rank: true, noSplit: true })}
       <div class="wk-banner">
-        <span class="tag">${esc(fmtDayShort(hd.date).toUpperCase())} IN ONE LINE</span>
-        ${fmtDayShort(hd.date)} produced <b>${indFmt(hd.lines)} lines</b> and <b>${indFmt(hd.units)} units</b> - the week's peak. <b>${hd.checkers} checkers</b> were on the floor across <b>${indFmt(hd.trays)} trays</b>, averaging <b>${indFmt(perChecker)} lines/checker</b> and <b>${indFmt(unitsPerChecker)} units/checker</b> for the day, worth roughly <b>${crFmt(hd.mrp)}</b> in MRP value.
+        <span class="tag">CHECKER READ</span>
+        ${mostTrays ? `<b>${esc(mostTrays.checkerName)}</b> ran the most trays (${indFmt(mostTrays.trays)}); ` : ''}<b>${esc(top.checkerName)}</b> carried the most line items (${indFmt(top.lineItems)}) at ${top.itemsPerMin} items/min. ${r.timeAndSpeedByChecker.length} checker(s) have tray time this range.
       </div>
     </div>`;
   }
 
-  // ===== Page 3: Scanner metrics =====
-  if (r.fastestScanners.length > 0) {
+  // ===== Page 4: Best day deep dive =====
+  if (r.bestDay) {
+    const bd = r.bestDay;
     out += `<div class="wk-page">
       ${wkHeader(r)}
-      <div class="wk-eyebrow">HARDWARE THROUGHPUT · WEEK</div>
-      <h1 class="wk-h1">Scanner based metrics</h1>
-      <p class="wk-subtitle">${s.activeScanners} scanner(s) were active this week. Avg is each scanner's week-long throughput; Peak is its single best day.</p>
-      <h2 class="wk-h2">Fastest scanners</h2>
-      <p class="wk-sec-note">Top 10, ranked by average items/min this week.</p>
-      ${wkTable(r.fastestScanners.slice(0, 10), [
-        { header: 'Scanner', key: 'scannerName', cls: 'wk-name' },
-        { header: 'Lines', key: 'lines', render: (x) => indFmt(x.lines) },
-        { header: 'Units', key: 'units', render: (x) => indFmt(x.units) },
-        { header: 'Items/min', key: 'avgItemsPerMin' },
-        { header: 'Units/min', key: 'avgUnitsPerMin' },
-      ], { rank: true, noSplit: true })}
-      ${r.stations.length > 0 ? `
-        <h2 class="wk-h2">Station units - this week</h2>
-        <p class="wk-sec-note">Stations group 5 scanners each (Station 1 = Scanners 1–5, and so on). Total units scanned by each station this week.</p>
-        <div class="wk-chart"><div class="wk-bars">
-          ${(() => {
-            const maxU = Math.max(1, ...r.stations.map((st) => st.units));
-            const minU = Math.min(...r.stations.map((st) => st.units));
-            return r.stations.map((st) => `<div class="wk-bar-col"><div class="wk-bar-num">${indFmt(st.units)}</div><div class="wk-bar${st.units === minU ? ' peak' : ''}" style="height:${Math.round((st.units / maxU) * 100)}%"></div><div class="wk-bar-label">S${st.station}</div></div>`).join('');
-          })()}
-        </div></div>` : ''}
-      <h2 class="wk-h2">All scanners - this week</h2>
-      <p class="wk-sec-note">Every scanner used this week, with who operated it and MRP handled.</p>
-      ${wkTable([...r.fastestScanners].sort((a, b) => (a.scannerName || '').localeCompare(b.scannerName || '', undefined, { numeric: true })), [
-        { header: 'Scanner', key: 'scannerName', cls: 'wk-name' },
-        { header: 'Checkers operated', key: 'checkersOperated', cls: 'wk-wrap' },
-        { header: 'Lines', key: 'lines', render: (x) => indFmt(x.lines) },
-        { header: 'Units', key: 'units', render: (x) => indFmt(x.units) },
-        { header: 'MRP', key: 'mrp', render: (x) => crFmt(x.mrp) },
-      ], { noSplit: true })}
-      ${r.topPicklists && r.topPicklists.length > 0 ? `
-      <h2 class="wk-h2">Top 10 picklists</h2>
-      <p class="wk-sec-note">Ranked by a combined score of line-item count, items/min and units/min (each normalized against the week's best, then averaged).</p>
-      ${wkTable(r.topPicklists, [
-        { header: 'Picklist', key: 'picklistNumber', cls: 'wk-name' },
-        { header: 'Lines', key: 'lines', render: (x) => indFmt(x.lines) },
-        { header: 'Units', key: 'units', render: (x) => indFmt(x.units) },
-        { header: 'Items/min', key: 'itemsPerMin' },
-        { header: 'Units/min', key: 'unitsPerMin' },
-        { header: 'Score', key: 'score' },
-      ], { rank: true, noSplit: true })}` : ''}
-    </div>`;
-  }
-
-  // ===== Page 4: Personal best day =====
-  if (r.checkerSummary.bestLineDayChecker || r.checkerSummary.bestUnitDayChecker) {
-    const bl = r.checkerSummary.bestLineDayChecker, bu = r.checkerSummary.bestUnitDayChecker;
-    out += `<div class="wk-page">
-      ${wkHeader(r)}
-      <div class="wk-eyebrow">PEOPLE · PERSONAL BEST DAY</div>
-      <h1 class="wk-h1">Highest lines/checker/day - and units</h1>
-      <p class="wk-subtitle">One person's best single operating day this week - not the floor average.</p>
+      <div class="wk-eyebrow">BEST DAY · ${esc(fmtDayShort(bd.bestDay))}</div>
+      <h1 class="wk-h1">Best-day deep dive — ${fmtDayShort(bd.bestDay)}</h1>
+      <p class="wk-subtitle">${fmtDayShort(bd.bestDay)} was this week's highest line-item day.</p>
       <div class="wk-kpis n4">
-        ${bl ? `<div class="wk-kpi"><div class="v">${indFmt(bl.lines)}</div><div class="l">Best single day · lines/checker/day</div><div class="s">${esc(bl.checkerName)} · ${fmtDayShort(bl.date)}</div></div>` : ''}
-        ${bu ? `<div class="wk-kpi"><div class="v">${indFmt(bu.units)}</div><div class="l">Best single day · units/checker/day</div><div class="s">${esc(bu.checkerName)} · ${fmtDayShort(bu.date)}</div></div>` : ''}
-      </div>
-      <h2 class="wk-h2">Top personal line-item days</h2>
-      <p class="wk-sec-note">Each row is one checker on one day.</p>
-      ${wkTable(r.topLinesDays, [
-        { header: 'Day', key: 'date', render: (d) => fmtDayShort(d.date) },
-        { header: 'Checker', key: 'checkerName', cls: 'wk-name' },
-        { header: 'Lines', key: 'lines', render: (d) => indFmt(d.lines) },
-      ], { rank: true })}
-      <h2 class="wk-h2">Top personal unit days</h2>
-      ${wkTable(r.topUnitsDays, [
-        { header: 'Day', key: 'date', render: (d) => fmtDayShort(d.date) },
-        { header: 'Checker', key: 'checkerName', cls: 'wk-name' },
-        { header: 'Units', key: 'units', render: (d) => indFmt(d.units) },
-      ], { rank: true })}
-    </div>`;
-  }
-
-  // ===== Page 5: Checker analysis =====
-  if (r.highestVolumeCheckers.length > 0) {
-    const cs = r.checkerSummary;
-    out += `<div class="wk-page">
-      ${wkHeader(r)}
-      <div class="wk-eyebrow">PEOPLE · WEEKLY</div>
-      <h1 class="wk-h1">Checker analysis - Week of ${weekLabel}</h1>
-      <p class="wk-subtitle">${cs.checkersSeen} checker(s) scanned at some point this week, with a daily average of <b>${s.avgCheckersPerDay} checkers</b> on the floor.</p>
-      <div class="wk-kpis n4">
-        ${cs.bestLineDayChecker ? `<div class="wk-kpi"><div class="v">${indFmt(cs.bestLineDayChecker.lines)}</div><div class="l">Best single day · lines/checker/day</div><div class="s">${esc(cs.bestLineDayChecker.checkerName)}</div></div>` : ''}
-        ${cs.bestUnitDayChecker ? `<div class="wk-kpi"><div class="v">${indFmt(cs.bestUnitDayChecker.units)}</div><div class="l">Best single day · units/checker/day</div><div class="s">${esc(cs.bestUnitDayChecker.checkerName)}</div></div>` : ''}
-        <div class="wk-kpi"><div class="v">${indFmt(cs.avgLinesPerCheckerDay)}</div><div class="l">Avg lines/checker/day</div><div class="s">This week</div></div>
-        <div class="wk-kpi"><div class="v">${indFmt(cs.avgUnitsPerCheckerDay)}</div><div class="l">Avg units/checker/day</div><div class="s">This week</div></div>
+        <div class="wk-kpi"><div class="v">${indFmt(bd.trays)}</div><div class="l">Trays</div></div>
+        <div class="wk-kpi"><div class="v">${indFmt(bd.units)}</div><div class="l">Units processed</div></div>
+        <div class="wk-kpi"><div class="v">${indFmt(bd.lines)}</div><div class="l">Lines</div></div>
+        <div class="wk-kpi"><div class="v">${crFmt(bd.valueRs)}</div><div class="l">Bill value</div></div>
       </div>
       <div class="wk-stats n3">
-        <div class="wk-stat"><div class="v">${cs.checkersSeen}</div><div class="l">Checkers seen</div></div>
-        <div class="wk-stat"><div class="v">${cs.presentAllDays}</div><div class="l">Present all ${s.operationalDays} days</div></div>
-        <div class="wk-stat"><div class="v">${s.avgCheckersPerDay}</div><div class="l">Avg on floor</div></div>
+        <div class="wk-stat"><div class="v">${bd.netMin}</div><div class="l">Net minutes</div></div>
+        <div class="wk-stat"><div class="v">${bd.unitsPerMin}</div><div class="l">Units/min</div></div>
+        <div class="wk-stat"><div class="v">${bd.itemsPerMin}</div><div class="l">Items/min</div></div>
       </div>
-      ${r.bench.length > 0 ? `
-        <h2 class="wk-h2">Bench breakdown</h2>
-        <p class="wk-sec-note">Total lines/units are the week sum for that bench. Averages are each person's lines (or units) divided by the days they scanned.</p>
-        ${wkTable(r.bench, [
-          { header: 'Bench', key: 'label', cls: 'wk-name' },
-          { header: 'Total lines', key: 'lines', render: (b) => indFmt(b.lines) },
-          { header: 'Avg lines/checker/day', key: 'avgLinesPerDay', render: (b) => indFmt(b.avgLinesPerDay) },
-          { header: 'Total units', key: 'units', render: (b) => indFmt(b.units) },
-          { header: 'Avg units/checker/day', key: 'avgUnitsPerDay', render: (b) => indFmt(b.avgUnitsPerDay) },
-          { header: 'Share of lines', key: 'shareOfLines', render: (b) => typeof b.shareOfLines === 'number' ? b.shareOfLines + '%' : b.shareOfLines },
-        ], { noSplit: true })}` : ''}
-      <h2 class="wk-h2">Fastest checkers - average items/min</h2>
-      <p class="wk-sec-note">Top 10 among checkers present at least a few days this week, ranked by average items/min.</p>
-      ${wkTable(r.fastestCheckers.slice(0, 10), [
+      <h2 class="wk-h2">Checkers on the best day</h2>
+      <p class="wk-sec-note">Top 10 by line items, ${fmtDayShort(bd.bestDay)} only.</p>
+      ${wkTable(r.bestDayCheckers.slice(0, 10), [
         { header: 'Checker', key: 'checkerName', cls: 'wk-name' },
-        { header: 'Days', key: 'days' },
-        { header: 'Items/min', key: 'itemsPerMin' },
-        { header: 'Units/min', key: 'unitsPerMin' },
+        { header: 'Trays', render: (c) => indFmt(c.trays) },
+        { header: 'Net min', render: (c) => c.netMin },
+        { header: 'Line items', render: (c) => indFmt(c.lineItems) },
+        { header: 'Units/min', render: (c) => c.netUnitsPerMin },
+        { header: 'Items/min', render: (c) => c.itemsPerMin },
       ], { rank: true, noSplit: true })}
-      <h2 class="wk-h2">Highest weekly volume</h2>
-      <p class="wk-sec-note">Ranked by total lines checked this week. MRP and active scan time together show how much value each checker handled and how long it actually took them.</p>
-      ${wkTable(r.highestVolumeCheckers, [
-        { header: 'Checker', key: 'checkerName', cls: 'wk-name' },
-        { header: 'Days', key: 'days' },
-        { header: 'Lines', key: 'lines', render: (c) => indFmt(c.lines) },
-        { header: 'Units', key: 'units', render: (c) => indFmt(c.units) },
-        { header: 'Lines/day', key: 'linesPerDay', render: (c) => indFmt(c.linesPerDay) },
-        { header: 'MRP', key: 'mrp', render: (c) => crFmt(c.mrp) },
-        { header: 'Active scan time', key: 'activeScanTime' },
+      ${r.avgTimeByFlow.length > 0 ? `
+      <h2 class="wk-h2">Average time by flow</h2>
+      <p class="wk-sec-note">Time between consecutive scans on the same tray, grouped by scan flow status, across the whole week.</p>
+      ${wkTable(r.avgTimeByFlow, [
+        { header: 'Scan flow status', key: 'scanFlowStatus', cls: 'wk-name' },
+        { header: 'Count', render: (x) => indFmt(x.count) },
+        { header: 'Avg time (sec)', key: 'avgTimeSec' },
+      ], { noSplit: true })}` : ''}
+    </div>`;
+  }
+
+  // ===== Page 5: Hourly activity =====
+  if (r.hourlyActivity.length > 0) {
+    const maxItems = Math.max(1, ...r.hourlyActivity.map((h) => h.totalItems));
+    out += `<div class="wk-page">
+      ${wkHeader(r)}
+      <div class="wk-eyebrow">WHEN THE FLOOR RUNS · IST</div>
+      <h1 class="wk-h1">Hourly activity</h1>
+      <p class="wk-subtitle">Line items by hour, IST, summed across ${weekLabel}. Avg/day divides by the number of days each hour was seen on.</p>
+      <div class="wk-chart"><div class="wk-bars">
+        ${r.hourlyActivity.map((h) => `<div class="wk-bar-col"><div class="wk-bar-num">${indFmt(h.totalItems)}</div><div class="wk-bar" style="height:${Math.round((h.totalItems / maxItems) * 100)}%"></div><div class="wk-bar-label">${esc(h.timeSlot)}</div></div>`).join('')}
+      </div></div>
+      ${wkTable(r.hourlyActivity, [
+        { header: 'Hour', key: 'timeSlot', cls: 'wk-name' },
+        { header: 'Total items', render: (h) => indFmt(h.totalItems) },
+        { header: 'Avg / day', key: 'avgItemsPerDay' },
+        { header: 'Peak single day', render: (h) => indFmt(h.peakSingleDay) },
+        { header: 'Peak date', render: (h) => fmtDayShort(h.peakDate) },
+      ], { noSplit: true })}
+    </div>`;
+  }
+
+  // ===== Page 6: Top products =====
+  if (r.topProducts.length > 0) {
+    out += `<div class="wk-page">
+      ${wkHeader(r)}
+      <div class="wk-eyebrow">PRODUCTS · UNITS</div>
+      <h1 class="wk-h1">Top products by volume</h1>
+      <p class="wk-subtitle">Highest products by units processed. Bill value is MRP × quantity. Top ${Math.min(20, r.topProducts.length)} of ${r.topProducts.length}.</p>
+      ${wkTable(r.topProducts.slice(0, 20), [
+        { header: 'Product', key: 'product', cls: 'wk-wrap wk-name' },
+        { header: 'Lines', render: (p) => indFmt(p.lines) },
+        { header: 'Units processed', render: (p) => indFmt(p.totalUnits) },
+        { header: 'Bill value', render: (p) => crFmt(p.valueRs) },
       ], { rank: true, noSplit: true })}
+      <div class="wk-banner">
+        <span class="tag">KEY TAKEAWAY</span>
+        ${weekLabel}: <b>${indFmt(totalLines)} lines</b> and <b>${indFmt(totalUnits)} units processed</b> across <b>${indFmt(completedTrays)} trays</b>, <b>${crFmt(totalValueMRP)}</b> bill value. Pace is <b>${unitsPerMin} units/min</b> and <b>${itemsPerMin} items/min</b>.${highestUnitsDay ? ` Highest units day is ${fmtDayShort(highestUnitsDay.date)} at ${indFmt(highestUnitsDay.totalUnits)} units.` : ''}
+      </div>
+    </div>`;
+  }
+
+  // ===== Page 7: Scanner-wise units completed =====
+  if (r.scannerWiseUnits.length > 0) {
+    out += `<div class="wk-page">
+      ${wkHeader(r)}
+      <div class="wk-eyebrow">SCANNERS · UNITS COMPLETED</div>
+      <h1 class="wk-h1">Scanner-wise units completed</h1>
+      <p class="wk-subtitle">${r.scannerWiseUnits.length} scanner(s) had completed trays this week, ranked by units completed. Scanners are labeled by rank, not device ID.</p>
+      ${wkTable(r.scannerWiseUnits.map((sc, i) => ({ ...sc, scannerLabel: `Scanner ${i + 1}` })), [
+        { header: 'Scanner', key: 'scannerLabel', cls: 'wk-name' },
+        { header: 'Trays', render: (x) => indFmt(x.trays) },
+        { header: 'Units completed', render: (x) => indFmt(x.unitsCompleted) },
+        { header: 'Lines', render: (x) => indFmt(x.lines) },
+        { header: 'Units/min', render: (x) => x.unitsPerMin },
+      ])}
     </div>`;
   }
 
@@ -808,7 +815,7 @@ function showWeeklyReport(data) {
   editHint.style.display = 'block';
   downloadBtn.disabled = false;
   downloadDocxBtn.disabled = false;
-  setStatus(`Loaded week ${data.weekStart} to ${data.weekEnd} (${data.summary.operationalDays} operational day(s)).`);
+  setStatus(`Loaded week ${data.weekStart} to ${data.weekEnd} (${data.operatingDays} operating day(s), ${data.summary.completedTrays || 0} trays).`);
 }
 
 function handleFile(e) {
@@ -826,7 +833,7 @@ function handleFile(e) {
       // wrong setting - a weekly CSV run through the daily parser is
       // missing fields the daily renderer expects and crashes instead of
       // showing anything useful.
-      const isWeekly = /SECTION,HIGHEST_DAY|\nweekStart,/.test(reader.result);
+      const isWeekly = /SECTION,DAILY_SUMMARY|SECTION,SCANNER_WISE_UNITS/.test(reader.result);
       document.getElementById('reportMode').value = isWeekly ? 'weekly' : 'daily';
       if (isWeekly) showWeeklyReport(parseWeeklyReportCsv(reader.result));
       else showReport(parseReportCsv(reader.result));
@@ -839,26 +846,40 @@ function handleFile(e) {
 }
 
 // Only works when this page is being served BY server.js itself
-// (http://localhost:<port>/) - then this is a same-origin request, no CORS
-// or mixed-content issues. Opened as a local file (file://) or from the
-// GitHub Pages copy, there's no server behind '/api/report' to answer this,
-// so it fails - the CSV-upload path above is what covers those cases.
+// (http://localhost:<port>/, run with `node server.js`) - then this is a
+// same-origin request, no CORS or mixed-content issues. Opened as a local
+// file (file://) or from the GitHub Pages copy, there's no server behind
+// '/api/report' to answer this, so it fails - the CSV-upload path above is
+// what covers those cases. Container/schema are passed straight through as
+// query params; server.js sets them as CONTAINER/SCHEMA env vars for the
+// same scripts.sh a user would otherwise run by hand - no script changes
+// needed to point this at a different branch or a different week.
 async function fetchFromServer() {
   const date = document.getElementById('fetchDate').value.trim();
+  const container = document.getElementById('fetchContainer').value.trim();
+  const schema = document.getElementById('fetchSchema').value.trim();
   const mode = document.getElementById('reportMode').value;
   const endpoint = mode === 'weekly' ? '/api/report/weekly' : '/api/report';
+  const params = new URLSearchParams();
+  if (date) params.set('date', date);
+  if (container) params.set('container', container);
+  if (schema) params.set('schema', schema);
   setStatus('Fetching…');
   downloadBtn.disabled = true;
   downloadDocxBtn.disabled = true;
   try {
-    const res = await fetch(`${endpoint}${date ? '?date=' + encodeURIComponent(date) : ''}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
+    const res = await fetch(`${endpoint}?${params.toString()}`);
+    const text = await res.text();
+    if (!res.ok) {
+      let msg = 'Request failed';
+      try { msg = JSON.parse(text).error || msg; } catch (_) { /* not JSON */ }
+      throw new Error(msg);
+    }
     document.getElementById('fileName').textContent = '';
-    if (mode === 'weekly') showWeeklyReport(data);
-    else showReport(data);
+    if (mode === 'weekly') showWeeklyReport(parseWeeklyReportCsv(text));
+    else showReport(parseReportCsv(text));
   } catch (err) {
-    setStatus('Could not reach the server (this only works when the page is opened via server.js, not as a local file or on GitHub Pages).', true);
+    setStatus(err.message || 'Could not reach the server (this only works when the page is opened via server.js, not as a local file or on GitHub Pages).', true);
   }
 }
 
@@ -1325,229 +1346,187 @@ function dxFooter(left, right) {
 function buildWeeklyDocxSections(r) {
   const s = r.summary;
   const weekLabel = `${fmtDayShort(r.weekStart)} – ${fmtDayShort(r.weekEnd)}`;
-  const daysByDate = [...r.daysRankedByLines].sort((a, b) => a.date.localeCompare(b.date));
+  const daily = r.dailySummary;
+  const totalUnits = s.unitsBilled || 0;
+  const totalValueMRP = s.totalValueMRP || 0;
+  const completedTrays = s.completedTrays || 0;
+  const totalLines = daily.reduce((a, d) => a + d.totalLines, 0);
+  const totalNetMin = daily.reduce((a, d) => a + d.netMin, 0);
+  const unitsPerMin = totalNetMin > 0 ? +(totalUnits / totalNetMin).toFixed(2) : 0;
+  const itemsPerMin = totalNetMin > 0 ? +(totalLines / totalNetMin).toFixed(2) : 0;
+  const highestUnitsDay = daily.reduce((best, d) => (!best || d.totalUnits > best.totalUnits ? d : best), null);
+  const highestLinesDay = daily.reduce((best, d) => (!best || d.totalLines > best.totalLines ? d : best), null);
+  const topLineDays = [...daily].sort((a, b) => b.totalLines - a.totalLines).slice(0, 5);
+  const maxTopLines = Math.max(1, ...topLineDays.map((d) => d.totalLines));
   const out = [];
 
-  // Page 1: Weekly Overview
+  // Page 1: Weekly overview
   out.push(dxHeaderBlock(r.reportDate));
   out.push(...dxSectionHeading(
-    'OPERATIONS REPORT · WEEKLY',
-    `Weekly Scan Report for ${r.schema} - ${weekLabel}`,
-    `Outbound checking across all picklists this week.${r.highestDay ? ` Highest day is ${indFmt(r.highestDay.lines)} lines on ${fmtDayShort(r.highestDay.date)},` : ''} across ${s.operationalDays} operational day(s).`,
+    `OPERATIONS REPORT · ${(r.schema || '').toUpperCase()}`,
+    `${r.schema} — ${weekLabel}`,
+    `Outbound checking on completed trays, ${weekLabel}. ${daily.length} day(s) have completed trays.${highestLinesDay ? ` Highest line day is ${indFmt(highestLinesDay.totalLines)} lines on ${fmtDayShort(highestLinesDay.date)}.` : ''} Units are ordered units, not scanned units.`,
   ));
   out.push(dxKpiRow([
-    { value: r.highestDay ? indFmt(r.highestDay.lines) : '-', label: "Highest day's lines", sub: r.highestDay ? fmtDayShort(r.highestDay.date) : '' },
-    { value: indFmt(s.avgLinesPerDay), label: 'Average lines / day', sub: `${s.operationalDays} operating days` },
-    { value: r.highestDay ? indFmt(r.highestDay.units) : '-', label: "Highest day's units", sub: r.highestDay ? fmtDayShort(r.highestDay.date) : '' },
-    { value: indFmt(s.avgUnitsPerDay), label: 'Average units / day', sub: `${s.operationalDays} operating days` },
-  ]));
-  out.push(dxGap());
-  out.push(dxKpiRow([
-    { value: String(s.highestItemsPerMin), label: 'Highest lines / min', sub: `Single fastest picklist${s.highestItemsPicklist ? ', GP ' + s.highestItemsPicklist : ''}` },
-    { value: String(s.highestUnitsPerMin), label: 'Highest units / min', sub: `Single fastest picklist${s.highestUnitsPicklist ? ', GP ' + s.highestUnitsPicklist : ''}` },
+    { value: indFmt(totalUnits), label: 'Total units processed', sub: daily.length ? indFmt(Math.round(totalUnits / daily.length)) + ' a day' : '' },
+    { value: indFmt(totalLines), label: 'Total lines', sub: daily.length ? indFmt(Math.round(totalLines / daily.length)) + ' a day' : '' },
+    { value: highestUnitsDay ? indFmt(highestUnitsDay.totalUnits) : '-', label: 'Highest units processed', sub: highestUnitsDay ? fmtDayShort(highestUnitsDay.date) : '' },
+    { value: crFmt(totalValueMRP), label: 'Bill value', sub: daily.length ? crFmt(totalValueMRP / daily.length) + ' / day' : '' },
   ]));
   out.push(dxGap());
   out.push(dxStatRow([
-    { value: String(s.operationalDays), label: 'Operational days' },
-    { value: lakhFmt(s.totalLines), label: 'Lines this week', sub: indFmt(s.totalLines) },
-    { value: lakhFmt(s.totalUnits), label: 'Units this week', sub: indFmt(s.totalUnits) },
-    { value: crFmt(s.totalMrp), label: 'MRP value' },
+    { value: String(daily.length), label: 'Operating days' },
+    { value: indFmt(completedTrays), label: 'Trays completed' },
+    { value: String(unitsPerMin), label: 'Units / min' },
+    { value: String(itemsPerMin), label: 'Items / min' },
   ]));
-  out.push(dxGap());
-  out.push(dxStatRow([
-    { value: String(s.avgCheckersPerDay), label: 'Avg checkers on floor' },
-    { value: String(s.activeScanners), label: 'Active scanners' },
-    { value: indFmt(s.totalTrays), label: 'Trays / GPs' },
-    { value: String(s.avgLinesPerTray), label: 'Avg lines / tray', sub: `${s.avgUnitsPerTray} units / tray` },
-  ]));
-  out.push(dxH2('Daily line-item volume'));
-  out.push(dxSecNote(`All ${daysByDate.length} operating day(s) this week. Bar length reflects lines checked that day.`));
-  const maxDayLines = Math.max(1, ...daysByDate.map((d) => d.lines));
-  out.push(dxBarChart(daysByDate.map((d) => ({
-    label: fmtDayShort(d.date), sub: `${indFmt(d.units)} u`, value: d.lines, valueLabel: indFmt(d.lines), peak: d.lines === maxDayLines,
+  out.push(dxH2(`Top ${topLineDays.length} line days`));
+  out.push(dxSecNote('Highest line days first. Bar length reflects total lines that day.'));
+  out.push(dxBarChart(topLineDays.map((d) => ({
+    label: fmtDayShort(d.date), sub: `${indFmt(d.totalUnits)} u`, value: d.totalLines, valueLabel: indFmt(d.totalLines), peak: d.totalLines === maxTopLines,
   }))));
-  out.push(dxH2('Days ranked by lines'));
-  out.push(...dxTable(r.daysRankedByLines, [
-    { header: 'Day', render: (d) => fmtDayShort(d.date) },
-    { header: 'Trays', render: (d) => indFmt(d.trays) },
-    { header: 'Lines', render: (d) => indFmt(d.lines) },
-    { header: 'Units', render: (d) => indFmt(d.units) },
-  ], { rank: true }));
 
-  // Page 2: Highest Day drill-down
-  if (r.highestDay) {
-    const hd = r.highestDay;
-    const perChecker = hd.checkers > 0 ? Math.round(hd.lines / hd.checkers) : 0;
-    const unitsPerChecker = hd.checkers > 0 ? Math.round(hd.units / hd.checkers) : 0;
+  // Page 2: Daily + Weekly summary
+  out.push(dxPageBreak());
+  out.push(dxHeaderBlock(r.reportDate));
+  out.push(...dxSectionHeading('SCANNER SPEED', 'Scanner based metrics', 'One row per day with completed trays.'));
+  out.push(...dxTable(daily, [
+    { header: 'Date', render: (d) => fmtDayShort(d.date) },
+    { header: 'Trays', render: (d) => indFmt(d.trays) },
+    { header: 'Lines', render: (d) => indFmt(d.totalLines) },
+    { header: 'Units processed', render: (d) => indFmt(d.totalUnits) },
+    { header: 'Bill value', render: (d) => crFmt(d.valueRs) },
+    { header: 'Units/min', render: (d) => d.netUnitsPerMin },
+    { header: 'Items/min', render: (d) => d.itemsPerMin },
+  ]));
+  out.push(dxH2('Weekly summary'));
+  out.push(dxSecNote('Same daily fetch and formulas, aggregated directly by the database per calendar week.'));
+  out.push(...dxTable(r.weeklySummary, [
+    { header: 'Week starting', render: (w) => fmtDayShort(w.weekStarting) },
+    { header: 'Week ending', render: (w) => fmtDayShort(w.weekEnding) },
+    { header: 'Trays', render: (w) => indFmt(w.trays) },
+    { header: 'Total units', render: (w) => indFmt(w.totalUnits) },
+    { header: 'Total lines', render: (w) => indFmt(w.totalLines) },
+    { header: 'Value', render: (w) => crFmt(w.valueRs) },
+    { header: 'Units/min', render: (w) => w.netUnitsPerMin },
+    { header: 'Items/min', render: (w) => w.itemsPerMin },
+  ]));
+
+  // Page 3: Time and speed by checker
+  if (r.timeAndSpeedByChecker.length > 0) {
+    const top = r.timeAndSpeedByChecker[0];
+    const mostTrays = r.timeAndSpeedByChecker.reduce((best, c) => (!best || c.trays > best.trays ? c : best), null);
     out.push(dxPageBreak());
     out.push(dxHeaderBlock(r.reportDate));
     out.push(...dxSectionHeading(
-      `HIGHEST DAY · ${fmtDayShort(hd.date)} · WEEKLY`,
-      `Highest line day - ${fmtDayShort(hd.date)}`,
-      `${fmtDayShort(hd.date)} was the highest line-item day this week, with ${hd.checkers} checker(s) on the floor across ${indFmt(hd.trays)} tray(s).`,
+      'CHECKERS · TIME AND SPEED', 'Time and speed by checker',
+      `Net minutes summed on each checker's completed trays. Top 20 of ${r.timeAndSpeedByChecker.length} checkers, by line items.`,
+    ));
+    out.push(...dxTable(r.timeAndSpeedByChecker.slice(0, 20), [
+      { header: 'Checker', render: (c) => c.checkerName },
+      { header: 'Trays', render: (c) => indFmt(c.trays) },
+      { header: 'Net min', render: (c) => c.netMin },
+      { header: 'Line items', render: (c) => indFmt(c.lineItems) },
+      { header: 'Units/min', render: (c) => c.netUnitsPerMin },
+      { header: 'Items/min', render: (c) => c.itemsPerMin },
+    ], { rank: true }));
+    out.push(dxGap(220));
+    out.push(dxBanner('CHECKER READ', [
+      ...(mostTrays ? [{ text: mostTrays.checkerName, bold: true }, { text: ' ran the most trays (' }, { text: indFmt(mostTrays.trays), bold: true }, { text: '); ' }] : []),
+      { text: top.checkerName, bold: true }, { text: ' carried the most line items (' }, { text: indFmt(top.lineItems), bold: true },
+      { text: `) at ${top.itemsPerMin} items/min. ${r.timeAndSpeedByChecker.length} checker(s) have tray time this range.` },
+    ]));
+  }
+
+  // Page 4: Best day deep dive
+  if (r.bestDay) {
+    const bd = r.bestDay;
+    out.push(dxPageBreak());
+    out.push(dxHeaderBlock(r.reportDate));
+    out.push(...dxSectionHeading(
+      `BEST DAY · ${fmtDayShort(bd.bestDay)}`, `Best-day deep dive — ${fmtDayShort(bd.bestDay)}`,
+      `${fmtDayShort(bd.bestDay)} was this week's highest line-item day.`,
     ));
     out.push(dxKpiRow([
-      { value: indFmt(hd.lines), label: `${fmtDayShort(hd.date)}'s lines` },
-      { value: indFmt(hd.units), label: `${fmtDayShort(hd.date)}'s units` },
-      { value: String(hd.checkers), label: 'Checkers on floor' },
-      { value: indFmt(hd.trays), label: 'Trays / GPs' },
+      { value: indFmt(bd.trays), label: 'Trays' },
+      { value: indFmt(bd.units), label: 'Units processed' },
+      { value: indFmt(bd.lines), label: 'Lines' },
+      { value: crFmt(bd.valueRs), label: 'Bill value' },
     ]));
     out.push(dxGap());
     out.push(dxStatRow([
-      { value: indFmt(perChecker), label: 'Lines / checker' },
-      { value: indFmt(unitsPerChecker), label: 'Units / checker' },
-      { value: crFmt(hd.mrp), label: `${fmtDayShort(hd.date)}'s MRP` },
+      { value: String(bd.netMin), label: 'Net minutes' },
+      { value: String(bd.unitsPerMin), label: 'Units/min' },
+      { value: String(bd.itemsPerMin), label: 'Items/min' },
     ]));
-    out.push(dxGap(220));
-    out.push(dxBanner(`${fmtDayShort(hd.date).toUpperCase()} IN ONE LINE`, [
-      { text: `${fmtDayShort(hd.date)} produced ` },
-      { text: `${indFmt(hd.lines)} lines`, bold: true },
-      { text: ' and ' },
-      { text: `${indFmt(hd.units)} units`, bold: true },
-      { text: " - the week's peak. " },
-      { text: `${hd.checkers} checkers`, bold: true },
-      { text: ' were on the floor across ' },
-      { text: `${indFmt(hd.trays)} trays`, bold: true },
-      { text: ', averaging ' },
-      { text: `${indFmt(perChecker)} lines/checker`, bold: true },
-      { text: ' and ' },
-      { text: `${indFmt(unitsPerChecker)} units/checker`, bold: true },
-      { text: ' for the day, worth roughly ' },
-      { text: crFmt(hd.mrp), bold: true },
-      { text: ' in MRP value.' },
-    ]));
-  }
-
-  // Page 3: Scanner metrics
-  if (r.fastestScanners.length > 0) {
-    out.push(dxPageBreak());
-    out.push(dxHeaderBlock(r.reportDate));
-    out.push(...dxSectionHeading(
-      'HARDWARE THROUGHPUT · WEEK',
-      'Scanner based metrics',
-      `${s.activeScanners} scanner(s) were active this week. Avg is each scanner's week-long throughput; Peak is its single best day.`,
-    ));
-    out.push(dxH2('Fastest scanners'));
-    out.push(dxSecNote('Top 10, ranked by average items/min this week.'));
-    out.push(...dxTable(r.fastestScanners.slice(0, 10), [
-      { header: 'Scanner', render: (x) => x.scannerName },
-      { header: 'Lines', render: (x) => indFmt(x.lines) },
-      { header: 'Units', render: (x) => indFmt(x.units) },
-      { header: 'Items/min', render: (x) => x.avgItemsPerMin },
-      { header: 'Units/min', render: (x) => x.avgUnitsPerMin },
+    out.push(dxH2('Checkers on the best day'));
+    out.push(...dxTable(r.bestDayCheckers.slice(0, 10), [
+      { header: 'Checker', render: (c) => c.checkerName },
+      { header: 'Trays', render: (c) => indFmt(c.trays) },
+      { header: 'Net min', render: (c) => c.netMin },
+      { header: 'Line items', render: (c) => indFmt(c.lineItems) },
+      { header: 'Units/min', render: (c) => c.netUnitsPerMin },
+      { header: 'Items/min', render: (c) => c.itemsPerMin },
     ], { rank: true }));
-    if (r.stations.length > 0) {
-      out.push(dxH2('Station units - this week'));
-      out.push(dxSecNote('Stations group 5 scanners each (Station 1 = Scanners 1-5, and so on). Total units scanned by each station this week.'));
-      const maxU = Math.max(1, ...r.stations.map((st) => st.units));
-      const minU = Math.min(...r.stations.map((st) => st.units));
-      out.push(dxBarChart(r.stations.map((st) => ({ label: `S${st.station}`, value: st.units, valueLabel: indFmt(st.units), peak: st.units === minU }))));
-    }
-    out.push(dxH2('All scanners - this week'));
-    out.push(dxSecNote('Every scanner used this week, with who operated it and MRP handled.'));
-    out.push(...dxTable([...r.fastestScanners].sort((a, b) => (a.scannerName || '').localeCompare(b.scannerName || '', undefined, { numeric: true })), [
-      { header: 'Scanner', render: (x) => x.scannerName },
-      { header: 'Checkers operated', render: (x) => x.checkersOperated },
-      { header: 'Lines', render: (x) => indFmt(x.lines) },
-      { header: 'Units', render: (x) => indFmt(x.units) },
-      { header: 'MRP', render: (x) => crFmt(x.mrp) },
-    ]));
-    if (r.topPicklists && r.topPicklists.length > 0) {
-      out.push(dxH2('Top 10 picklists'));
-      out.push(dxSecNote("Ranked by a combined score of line-item count, items/min and units/min (each normalized against the week's best, then averaged)."));
-      out.push(...dxTable(r.topPicklists, [
-        { header: 'Picklist', render: (x) => x.picklistNumber },
-        { header: 'Lines', render: (x) => indFmt(x.lines) },
-        { header: 'Units', render: (x) => indFmt(x.units) },
-        { header: 'Items/min', render: (x) => x.itemsPerMin },
-        { header: 'Units/min', render: (x) => x.unitsPerMin },
-        { header: 'Score', render: (x) => x.score },
-      ], { rank: true }));
-    }
-  }
-
-  // Page 4: Personal best day
-  if (r.checkerSummary.bestLineDayChecker || r.checkerSummary.bestUnitDayChecker) {
-    const bl = r.checkerSummary.bestLineDayChecker, bu = r.checkerSummary.bestUnitDayChecker;
-    out.push(dxPageBreak());
-    out.push(dxHeaderBlock(r.reportDate));
-    out.push(...dxSectionHeading(
-      'PEOPLE · PERSONAL BEST DAY',
-      'Highest lines/checker/day - and units',
-      "One person's best single operating day this week - not the floor average.",
-    ));
-    const kpis = [];
-    if (bl) kpis.push({ value: indFmt(bl.lines), label: 'Best single day · lines/checker/day', sub: `${bl.checkerName} · ${fmtDayShort(bl.date)}` });
-    if (bu) kpis.push({ value: indFmt(bu.units), label: 'Best single day · units/checker/day', sub: `${bu.checkerName} · ${fmtDayShort(bu.date)}` });
-    out.push(dxKpiRow(kpis));
-    out.push(dxH2('Top personal line-item days'));
-    out.push(dxSecNote('Each row is one checker on one day.'));
-    out.push(...dxTable(r.topLinesDays, [
-      { header: 'Day', render: (d) => fmtDayShort(d.date) },
-      { header: 'Checker', render: (d) => d.checkerName },
-      { header: 'Lines', render: (d) => indFmt(d.lines) },
-    ], { rank: true }));
-    out.push(dxH2('Top personal unit days'));
-    out.push(...dxTable(r.topUnitsDays, [
-      { header: 'Day', render: (d) => fmtDayShort(d.date) },
-      { header: 'Checker', render: (d) => d.checkerName },
-      { header: 'Units', render: (d) => indFmt(d.units) },
-    ], { rank: true }));
-  }
-
-  // Page 5: Checker analysis
-  if (r.highestVolumeCheckers.length > 0) {
-    const cs = r.checkerSummary;
-    out.push(dxPageBreak());
-    out.push(dxHeaderBlock(r.reportDate));
-    out.push(...dxSectionHeading(
-      'PEOPLE · WEEKLY',
-      `Checker analysis - Week of ${weekLabel}`,
-      `${cs.checkersSeen} checker(s) scanned at some point this week, with a daily average of ${s.avgCheckersPerDay} checkers on the floor.`,
-    ));
-    const kpis5 = [];
-    if (cs.bestLineDayChecker) kpis5.push({ value: indFmt(cs.bestLineDayChecker.lines), label: 'Best single day · lines/checker/day', sub: cs.bestLineDayChecker.checkerName });
-    if (cs.bestUnitDayChecker) kpis5.push({ value: indFmt(cs.bestUnitDayChecker.units), label: 'Best single day · units/checker/day', sub: cs.bestUnitDayChecker.checkerName });
-    kpis5.push({ value: indFmt(cs.avgLinesPerCheckerDay), label: 'Avg lines/checker/day', sub: 'This week' });
-    kpis5.push({ value: indFmt(cs.avgUnitsPerCheckerDay), label: 'Avg units/checker/day', sub: 'This week' });
-    out.push(dxKpiRow(kpis5));
-    out.push(dxGap());
-    out.push(dxStatRow([
-      { value: String(cs.checkersSeen), label: 'Checkers seen' },
-      { value: String(cs.presentAllDays), label: `Present all ${s.operationalDays} days` },
-      { value: String(s.avgCheckersPerDay), label: 'Avg on floor' },
-    ]));
-    if (r.bench.length > 0) {
-      out.push(dxH2('Bench breakdown'));
-      out.push(dxSecNote("Total lines/units are the week sum for that bench. Averages are each person's lines (or units) divided by the days they scanned."));
-      out.push(...dxTable(r.bench, [
-        { header: 'Bench', render: (b) => b.label },
-        { header: 'Total lines', render: (b) => indFmt(b.lines) },
-        { header: 'Avg lines/checker/day', render: (b) => indFmt(b.avgLinesPerDay) },
-        { header: 'Total units', render: (b) => indFmt(b.units) },
-        { header: 'Avg units/checker/day', render: (b) => indFmt(b.avgUnitsPerDay) },
-        { header: 'Share of lines', render: (b) => (typeof b.shareOfLines === 'number' ? b.shareOfLines + '%' : b.shareOfLines) },
+    if (r.avgTimeByFlow.length > 0) {
+      out.push(dxH2('Average time by flow'));
+      out.push(...dxTable(r.avgTimeByFlow, [
+        { header: 'Scan flow status', render: (x) => x.scanFlowStatus },
+        { header: 'Count', render: (x) => indFmt(x.count) },
+        { header: 'Avg time (sec)', render: (x) => x.avgTimeSec },
       ]));
     }
-    out.push(dxH2('Fastest checkers - average items/min'));
-    out.push(dxSecNote('Top 10 among checkers present at least a few days this week, ranked by average items/min.'));
-    out.push(...dxTable(r.fastestCheckers.slice(0, 10), [
-      { header: 'Checker', render: (c) => c.checkerName },
-      { header: 'Days', render: (c) => c.days },
-      { header: 'Items/min', render: (c) => c.itemsPerMin },
-      { header: 'Units/min', render: (c) => c.unitsPerMin },
+  }
+
+  // Page 5: Hourly activity
+  if (r.hourlyActivity.length > 0) {
+    out.push(dxPageBreak());
+    out.push(dxHeaderBlock(r.reportDate));
+    out.push(...dxSectionHeading('WHEN THE FLOOR RUNS · IST', 'Hourly activity', `Line items by hour, IST, summed across ${weekLabel}.`));
+    out.push(...dxTable(r.hourlyActivity, [
+      { header: 'Hour', render: (h) => h.timeSlot },
+      { header: 'Total items', render: (h) => indFmt(h.totalItems) },
+      { header: 'Avg / day', render: (h) => h.avgItemsPerDay },
+      { header: 'Peak single day', render: (h) => indFmt(h.peakSingleDay) },
+      { header: 'Peak date', render: (h) => fmtDayShort(h.peakDate) },
+    ]));
+  }
+
+  // Page 6: Top products
+  if (r.topProducts.length > 0) {
+    out.push(dxPageBreak());
+    out.push(dxHeaderBlock(r.reportDate));
+    out.push(...dxSectionHeading('PRODUCTS · UNITS', 'Top products by volume', `Highest products by units processed. Top ${Math.min(20, r.topProducts.length)} of ${r.topProducts.length}.`));
+    out.push(...dxTable(r.topProducts.slice(0, 20), [
+      { header: 'Product', render: (p) => p.product },
+      { header: 'Lines', render: (p) => indFmt(p.lines) },
+      { header: 'Units processed', render: (p) => indFmt(p.totalUnits) },
+      { header: 'Bill value', render: (p) => crFmt(p.valueRs) },
     ], { rank: true }));
-    out.push(dxH2('Highest weekly volume'));
-    out.push(dxSecNote('Ranked by total lines checked this week. MRP and active scan time together show how much value each checker handled and how long it actually took them.'));
-    out.push(...dxTable(r.highestVolumeCheckers, [
-      { header: 'Checker', render: (c) => c.checkerName },
-      { header: 'Days', render: (c) => c.days },
-      { header: 'Lines', render: (c) => indFmt(c.lines) },
-      { header: 'Units', render: (c) => indFmt(c.units) },
-      { header: 'Lines/day', render: (c) => indFmt(c.linesPerDay) },
-      { header: 'MRP', render: (c) => crFmt(c.mrp) },
-      { header: 'Active scan time', render: (c) => c.activeScanTime },
-    ], { rank: true }));
+    out.push(dxGap(220));
+    out.push(dxBanner('KEY TAKEAWAY', [
+      { text: `${weekLabel}: ` }, { text: `${indFmt(totalLines)} lines`, bold: true }, { text: ' and ' },
+      { text: `${indFmt(totalUnits)} units processed`, bold: true }, { text: ' across ' }, { text: `${indFmt(completedTrays)} trays`, bold: true },
+      { text: `, ${crFmt(totalValueMRP)} bill value. Pace is ` }, { text: `${unitsPerMin} units/min`, bold: true }, { text: ' and ' },
+      { text: `${itemsPerMin} items/min`, bold: true }, { text: '.' },
+    ]));
+  }
+
+  // Page 7: Scanner-wise units completed
+  if (r.scannerWiseUnits.length > 0) {
+    out.push(dxPageBreak());
+    out.push(dxHeaderBlock(r.reportDate));
+    out.push(...dxSectionHeading(
+      'SCANNERS · UNITS COMPLETED', 'Scanner-wise units completed',
+      `${r.scannerWiseUnits.length} scanner(s) had completed trays this week, ranked by units completed.`,
+    ));
+    out.push(...dxTable(r.scannerWiseUnits.map((sc, i) => ({ ...sc, scannerLabel: `Scanner ${i + 1}` })), [
+      { header: 'Scanner', render: (x) => x.scannerLabel },
+      { header: 'Trays', render: (x) => indFmt(x.trays) },
+      { header: 'Units completed', render: (x) => indFmt(x.unitsCompleted) },
+      { header: 'Lines', render: (x) => indFmt(x.lines) },
+      { header: 'Units/min', render: (x) => x.unitsPerMin },
+    ]));
   }
 
   return out;
