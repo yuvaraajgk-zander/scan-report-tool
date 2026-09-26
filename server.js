@@ -108,7 +108,10 @@ const server = http.createServer(async (req, res) => {
         send(res, 200, csv, 'text/csv; charset=utf-8');
       } else {
         const end = ddmmyyyyToIso(dateStr) || new Date().toISOString().slice(0, 10);
-        const start = isoMinusDays(end, 6);
+        // Working week is Monday-Saturday (6 days) - Sunday is off, so the
+        // window is the Saturday entered back to the Monday before it, not
+        // a full 7-day trailing window.
+        const start = isoMinusDays(end, 5);
         env.START_DATE = start;
         env.END_DATE = end;
         const csv = await runScript(
