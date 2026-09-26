@@ -150,6 +150,8 @@
       <input type="text" id="fetchContainer" placeholder="zander-postgres" style="width:120px" />
       <label for="fetchSchema">Schema</label>
       <input type="text" id="fetchSchema" placeholder="palepumyp" style="width:100px" />
+      <label for="tenantName">Tenant Name</label>
+      <input type="text" id="tenantName" placeholder="e.g. Palepu Mylapore" style="width:160px" />
       <label for="fetchDate">Date</label>
       <input type="text" id="fetchDate" placeholder="DD-MM-YYYY" />
       <button class="btn" id="fetchData">Get Data</button>
@@ -718,14 +720,6 @@ function renderWeeklyReport(r) {
         { header: 'Units/min', render: (c) => c.netUnitsPerMin },
         { header: 'Items/min', render: (c) => c.itemsPerMin },
       ], { rank: true, noSplit: true })}
-      ${r.avgTimeByFlow.length > 0 ? `
-      <h2 class="wk-h2">Average time by flow</h2>
-      <p class="wk-sec-note">Time between consecutive scans on the same tray, grouped by scan flow status, across the whole week.</p>
-      ${wkTable(r.avgTimeByFlow, [
-        { header: 'Scan flow status', key: 'scanFlowStatus', cls: 'wk-name' },
-        { header: 'Count', render: (x) => indFmt(x.count) },
-        { header: 'Avg time (sec)', key: 'avgTimeSec' },
-      ], { noSplit: true })}` : ''}
     </div>`;
   }
 
@@ -794,7 +788,17 @@ let loadedReportDate = null;
 let currentReportKind = 'daily'; // drives which renderer/PDF exporter downloadPdf() uses
 let loadedDailyData = null;
 
+// A user-facing display name that stands in for the raw DB schema
+// everywhere the report shows it (title, subtitle, footer, config box) -
+// the query itself still runs against the real schema; this only changes
+// what the report calls it on the page/PDF/DOCX.
+function withTenantName(data) {
+  const tenantName = document.getElementById('tenantName').value.trim();
+  return tenantName ? { ...data, schema: tenantName } : data;
+}
+
 function showReport(data) {
+  data = withTenantName(data);
   currentReportKind = 'daily';
   loadedReportDate = data.reportDate;
   loadedDailyData = data;
@@ -811,6 +815,7 @@ function showReport(data) {
 let loadedWeeklyData = null;
 
 function showWeeklyReport(data) {
+  data = withTenantName(data);
   currentReportKind = 'weekly';
   loadedReportDate = `${data.weekStart}_to_${data.weekEnd}`;
   loadedWeeklyData = data;
@@ -1170,10 +1175,6 @@ function dxRuns(segments, opts = {}) {
   });
 }
 
-function dxBullet(segments) {
-  return dxRuns(segments, { color: DX.inkSoft, size: 19, spacing: { after: 80 }, bullet: { level: 0 } });
-}
-
 function dxHeaderBlock(dateLabel) {
   const logoW = 118, logoH = Math.round(logoW / WK_LOGO_ASPECT);
   return new docx.Paragraph({
@@ -1260,41 +1261,6 @@ function dxLabelValueRow(items) {
   return new docx.Table({ rows: [new docx.TableRow({ children: cells })], width: { size: 100, type: docx.WidthType.PERCENTAGE } });
 }
 
-// Reuses the exact same `columns` shape (header + optional render(row)) the
-// on-screen wkTable() calls already define, so the DOCX and HTML/PDF
-// renderers can't silently drift apart - both read the same column specs.
-function dxTable(rows, columns, opts = {}) {
-  if (!rows || rows.length === 0) return [dxSecNote('No data for this period.')];
-  const rightFrom = opts.rightAlignFrom != null ? opts.rightAlignFrom : 2;
-  const headers = (opts.rank ? ['#'] : []).concat(columns.map((c) => c.header));
-  const bodyRows = rows.map((row, idx) => (
-    (opts.rank ? [opts.padRank === false ? String(idx + 1) : String(idx + 1).padStart(2, '0')] : [])
-      .concat(columns.map((c) => (c.render ? c.render(row) : row[c.key])))
-  ));
-  const headerRow = new docx.TableRow({
-    tableHeader: true,
-    children: headers.map((h, i) => new docx.TableCell({
-      shading: { fill: DX.headerBg },
-      borders: dxAllBorders(DX.line, 4),
-      margins: dxCellMargins(),
-      children: [dxPara(String(h), { bold: true, color: DX.white, size: 15, align: i >= rightFrom ? docx.AlignmentType.RIGHT : docx.AlignmentType.LEFT })],
-    })),
-  });
-  const dataRows = bodyRows.map((r) => new docx.TableRow({
-    children: r.map((val, ci) => new docx.TableCell({
-      borders: dxAllBorders(DX.line, 4),
-      margins: dxCellMargins(),
-      children: [dxPara(String(val), {
-        color: ci === 0 ? DX.ink : DX.inkSoft,
-        bold: ci === 0,
-        size: 17,
-        align: ci >= rightFrom ? docx.AlignmentType.RIGHT : docx.AlignmentType.LEFT,
-      })],
-    })),
-  }));
-  return [new docx.Table({ rows: [headerRow, ...dataRows], width: { size: 100, type: docx.WidthType.PERCENTAGE } })];
-}
-
 function dxBanner(tag, segments) {
   return new docx.Table({
     rows: [new docx.TableRow({ children: [new docx.TableCell({
@@ -1349,272 +1315,148 @@ function dxFooter(left, right) {
   });
 }
 
-function buildWeeklyDocxSections(r) {
-  const s = r.summary;
-  const weekLabel = `${fmtDayShort(r.weekStart)} – ${fmtDayShort(r.weekEnd)}`;
-  const daily = r.dailySummary;
-  const totalUnits = s.unitsBilled || 0;
-  const totalValueMRP = s.totalValueMRP || 0;
-  const completedTrays = s.completedTrays || 0;
-  const totalLines = daily.reduce((a, d) => a + d.totalLines, 0);
-  const totalNetMin = daily.reduce((a, d) => a + d.netMin, 0);
-  const unitsPerMin = totalNetMin > 0 ? +(totalUnits / totalNetMin).toFixed(2) : 0;
-  const itemsPerMin = totalNetMin > 0 ? +(totalLines / totalNetMin).toFixed(2) : 0;
-  const highestUnitsDay = daily.reduce((best, d) => (!best || d.totalUnits > best.totalUnits ? d : best), null);
-  const highestLinesDay = daily.reduce((best, d) => (!best || d.totalLines > best.totalLines ? d : best), null);
-  const topLineDays = [...daily].sort((a, b) => b.totalLines - a.totalLines).slice(0, 5);
-  const maxTopLines = Math.max(1, ...topLineDays.map((d) => d.totalLines));
-  const out = [];
+// Builds the DOCX straight from the live, on-screen DOM (post-edit) instead
+// of the original parsed data - so a downloaded DOCX (and PDF, which already
+// screenshots the live DOM) always matches whatever the user actually sees
+// and has edited on screen, not a fresh rebuild from the original CSV.
+// Recognizes the same class vocabulary renderReport()/renderWeeklyReport()
+// emit; anything unrecognized is just a transparent wrapper to recurse into.
+function textOf(el) { return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }
 
-  // Page 1: Weekly overview
-  out.push(dxHeaderBlock(r.reportDate));
-  out.push(...dxSectionHeading(
-    `OPERATIONS REPORT · ${(r.schema || '').toUpperCase()}`,
-    `${r.schema} — ${weekLabel}`,
-    `Outbound checking on completed trays, ${weekLabel}. ${daily.length} day(s) have completed trays.${highestLinesDay ? ` Highest line day is ${indFmt(highestLinesDay.totalLines)} lines on ${fmtDayShort(highestLinesDay.date)}.` : ''} Units are ordered units, not scanned units.`,
-  ));
-  out.push(dxKpiRow([
-    { value: indFmt(totalUnits), label: 'Total units processed', sub: daily.length ? indFmt(Math.round(totalUnits / daily.length)) + ' a day' : '' },
-    { value: indFmt(totalLines), label: 'Total lines', sub: daily.length ? indFmt(Math.round(totalLines / daily.length)) + ' a day' : '' },
-    { value: highestUnitsDay ? indFmt(highestUnitsDay.totalUnits) : '-', label: 'Highest units processed', sub: highestUnitsDay ? fmtDayShort(highestUnitsDay.date) : '' },
-    { value: crFmt(totalValueMRP), label: 'Bill value', sub: daily.length ? crFmt(totalValueMRP / daily.length) + ' / day' : '' },
-  ]));
-  out.push(dxGap());
-  out.push(dxStatRow([
-    { value: String(daily.length), label: 'Operating days' },
-    { value: indFmt(completedTrays), label: 'Trays completed' },
-    { value: String(unitsPerMin), label: 'Units / min' },
-    { value: String(itemsPerMin), label: 'Items / min' },
-  ]));
-  out.push(dxH2(`Top ${topLineDays.length} line days`));
-  out.push(dxSecNote('Highest line days first. Bar length reflects total lines that day.'));
-  out.push(dxBarChart(topLineDays.map((d) => ({
-    label: fmtDayShort(d.date), sub: `${indFmt(d.totalUnits)} u`, value: d.totalLines, valueLabel: indFmt(d.totalLines), peak: d.totalLines === maxTopLines,
-  }))));
-
-  // Page 2: Daily + Weekly summary
-  out.push(dxPageBreak());
-  out.push(dxHeaderBlock(r.reportDate));
-  out.push(...dxSectionHeading('SCANNER SPEED', 'Scanner based metrics', 'One row per day with completed trays.'));
-  out.push(...dxTable(daily, [
-    { header: 'Date', render: (d) => fmtDayShort(d.date) },
-    { header: 'Trays', render: (d) => indFmt(d.trays) },
-    { header: 'Lines', render: (d) => indFmt(d.totalLines) },
-    { header: 'Units processed', render: (d) => indFmt(d.totalUnits) },
-    { header: 'Bill value', render: (d) => crFmt(d.valueRs) },
-    { header: 'Units/min', render: (d) => d.netUnitsPerMin },
-    { header: 'Items/min', render: (d) => d.itemsPerMin },
-  ]));
-  out.push(dxH2('Weekly summary'));
-  out.push(dxSecNote('Same daily fetch and formulas, aggregated directly by the database per calendar week.'));
-  out.push(...dxTable(r.weeklySummary, [
-    { header: 'Week starting', render: (w) => fmtDayShort(w.weekStarting) },
-    { header: 'Week ending', render: (w) => fmtDayShort(w.weekEnding) },
-    { header: 'Trays', render: (w) => indFmt(w.trays) },
-    { header: 'Total units', render: (w) => indFmt(w.totalUnits) },
-    { header: 'Total lines', render: (w) => indFmt(w.totalLines) },
-    { header: 'Value', render: (w) => crFmt(w.valueRs) },
-    { header: 'Units/min', render: (w) => w.netUnitsPerMin },
-    { header: 'Items/min', render: (w) => w.itemsPerMin },
-  ]));
-
-  // Page 3: Time and speed by checker
-  if (r.timeAndSpeedByChecker.length > 0) {
-    const top = r.timeAndSpeedByChecker[0];
-    const mostTrays = r.timeAndSpeedByChecker.reduce((best, c) => (!best || c.trays > best.trays ? c : best), null);
-    out.push(dxPageBreak());
-    out.push(dxHeaderBlock(r.reportDate));
-    out.push(...dxSectionHeading(
-      'CHECKERS · TIME AND SPEED', 'Time and speed by checker',
-      `Net minutes summed on each checker's completed trays. Top 20 of ${r.timeAndSpeedByChecker.length} checkers, by line items.`,
-    ));
-    out.push(...dxTable(r.timeAndSpeedByChecker.slice(0, 20), [
-      { header: 'Checker', render: (c) => c.checkerName },
-      { header: 'Trays', render: (c) => indFmt(c.trays) },
-      { header: 'Net min', render: (c) => c.netMin },
-      { header: 'Line items', render: (c) => indFmt(c.lineItems) },
-      { header: 'Units/min', render: (c) => c.netUnitsPerMin },
-      { header: 'Items/min', render: (c) => c.itemsPerMin },
-    ], { rank: true }));
-    out.push(dxGap(220));
-    out.push(dxBanner('CHECKER READ', [
-      ...(mostTrays ? [{ text: mostTrays.checkerName, bold: true }, { text: ' ran the most trays (' }, { text: indFmt(mostTrays.trays), bold: true }, { text: '); ' }] : []),
-      { text: top.checkerName, bold: true }, { text: ' carried the most line items (' }, { text: indFmt(top.lineItems), bold: true },
-      { text: `) at ${top.itemsPerMin} items/min. ${r.timeAndSpeedByChecker.length} checker(s) have tray time this range.` },
-    ]));
-  }
-
-  // Page 4: Best day deep dive
-  if (r.bestDay) {
-    const bd = r.bestDay;
-    out.push(dxPageBreak());
-    out.push(dxHeaderBlock(r.reportDate));
-    out.push(...dxSectionHeading(
-      `BEST DAY · ${fmtDayShort(bd.bestDay)}`, `Best-day deep dive — ${fmtDayShort(bd.bestDay)}`,
-      `${fmtDayShort(bd.bestDay)} was this week's highest line-item day.`,
-    ));
-    out.push(dxKpiRow([
-      { value: indFmt(bd.trays), label: 'Trays' },
-      { value: indFmt(bd.units), label: 'Units processed' },
-      { value: indFmt(bd.lines), label: 'Lines' },
-      { value: crFmt(bd.valueRs), label: 'Bill value' },
-    ]));
-    out.push(dxGap());
-    out.push(dxStatRow([
-      { value: String(bd.netMin), label: 'Net minutes' },
-      { value: String(bd.unitsPerMin), label: 'Units/min' },
-      { value: String(bd.itemsPerMin), label: 'Items/min' },
-    ]));
-    out.push(dxH2('Checkers on the best day'));
-    out.push(...dxTable(r.bestDayCheckers.slice(0, 10), [
-      { header: 'Checker', render: (c) => c.checkerName },
-      { header: 'Trays', render: (c) => indFmt(c.trays) },
-      { header: 'Net min', render: (c) => c.netMin },
-      { header: 'Line items', render: (c) => indFmt(c.lineItems) },
-      { header: 'Units/min', render: (c) => c.netUnitsPerMin },
-      { header: 'Items/min', render: (c) => c.itemsPerMin },
-    ], { rank: true }));
-    if (r.avgTimeByFlow.length > 0) {
-      out.push(dxH2('Average time by flow'));
-      out.push(...dxTable(r.avgTimeByFlow, [
-        { header: 'Scan flow status', render: (x) => x.scanFlowStatus },
-        { header: 'Count', render: (x) => indFmt(x.count) },
-        { header: 'Avg time (sec)', render: (x) => x.avgTimeSec },
-      ]));
+function segmentsFromNode(node) {
+  const segs = [];
+  const walk = (n, bold) => {
+    if (n.nodeType === 3) {
+      const t = n.textContent.replace(/\s+/g, ' ');
+      if (t) segs.push({ text: t, bold });
+      return;
     }
-  }
-
-  // Page 5: Hourly activity
-  if (r.hourlyActivity.length > 0) {
-    out.push(dxPageBreak());
-    out.push(dxHeaderBlock(r.reportDate));
-    out.push(...dxSectionHeading('WHEN THE FLOOR RUNS · IST', 'Hourly activity', `Line items by hour, IST, summed across ${weekLabel}.`));
-    out.push(...dxTable(r.hourlyActivity, [
-      { header: 'Hour', render: (h) => h.timeSlot },
-      { header: 'Total items', render: (h) => indFmt(h.totalItems) },
-      { header: 'Avg / day', render: (h) => h.avgItemsPerDay },
-      { header: 'Peak single day', render: (h) => indFmt(h.peakSingleDay) },
-      { header: 'Peak date', render: (h) => fmtDayShort(h.peakDate) },
-    ]));
-  }
-
-  // Page 6: Top products
-  if (r.topProducts.length > 0) {
-    out.push(dxPageBreak());
-    out.push(dxHeaderBlock(r.reportDate));
-    out.push(...dxSectionHeading('PRODUCTS · UNITS', 'Top products by volume', `Highest products by units processed. Top ${Math.min(20, r.topProducts.length)} of ${r.topProducts.length}.`));
-    out.push(...dxTable(r.topProducts.slice(0, 20), [
-      { header: 'Product', render: (p) => p.product },
-      { header: 'Lines', render: (p) => indFmt(p.lines) },
-      { header: 'Units processed', render: (p) => indFmt(p.totalUnits) },
-      { header: 'Bill value', render: (p) => crFmt(p.valueRs) },
-    ], { rank: true }));
-    out.push(dxGap(220));
-    out.push(dxBanner('KEY TAKEAWAY', [
-      { text: `${weekLabel}: ` }, { text: `${indFmt(totalLines)} lines`, bold: true }, { text: ' and ' },
-      { text: `${indFmt(totalUnits)} units processed`, bold: true }, { text: ' across ' }, { text: `${indFmt(completedTrays)} trays`, bold: true },
-      { text: `, ${crFmt(totalValueMRP)} bill value. Pace is ` }, { text: `${unitsPerMin} units/min`, bold: true }, { text: ' and ' },
-      { text: `${itemsPerMin} items/min`, bold: true }, { text: '.' },
-    ]));
-  }
-
-  // Page 7: Scanner-wise units completed
-  if (r.scannerWiseUnits.length > 0) {
-    out.push(dxPageBreak());
-    out.push(dxHeaderBlock(r.reportDate));
-    out.push(...dxSectionHeading(
-      'SCANNERS · UNITS COMPLETED', 'Scanner-wise units completed',
-      `${r.scannerWiseUnits.length} scanner(s) had completed trays this week, ranked by units completed.`,
-    ));
-    out.push(...dxTable(r.scannerWiseUnits.map((sc, i) => ({ ...sc, scannerLabel: `Scanner ${i + 1}` })), [
-      { header: 'Scanner', render: (x) => x.scannerLabel },
-      { header: 'Trays', render: (x) => indFmt(x.trays) },
-      { header: 'Units completed', render: (x) => indFmt(x.unitsCompleted) },
-      { header: 'Lines', render: (x) => indFmt(x.lines) },
-      { header: 'Units/min', render: (x) => x.unitsPerMin },
-    ]));
-  }
-
-  return out;
+    if (n.nodeType !== 1) return;
+    const isBold = bold || n.tagName === 'B' || n.tagName === 'STRONG';
+    Array.from(n.childNodes).forEach((c) => walk(c, isBold));
+  };
+  Array.from(node.childNodes).forEach((c) => walk(c, false));
+  return segs.length ? segs : [{ text: textOf(node), bold: false }];
 }
 
-function buildDailyDocxSections(r) {
-  const cov = r.coverage, wl = r.workload;
+function dxTableFromEl(tableEl) {
+  const ths = Array.from(tableEl.querySelectorAll('thead th'));
+  const trs = Array.from(tableEl.querySelectorAll('tbody tr'));
+  if (ths.length === 0 && trs.length === 0) return [];
+  const headerRow = new docx.TableRow({
+    tableHeader: true,
+    children: ths.map((th) => new docx.TableCell({
+      shading: { fill: DX.headerBg }, borders: dxAllBorders(DX.line, 4), margins: dxCellMargins(),
+      children: [dxPara(textOf(th), { bold: true, color: DX.white, size: 15 })],
+    })),
+  });
+  const dataRows = trs.map((tr) => {
+    const isTotal = tr.classList.contains('total');
+    const tds = Array.from(tr.querySelectorAll('td'));
+    return new docx.TableRow({
+      children: tds.map((td, ci) => new docx.TableCell({
+        borders: dxAllBorders(DX.line, 4), margins: dxCellMargins(),
+        shading: isTotal ? { fill: DX.page } : undefined,
+        children: [dxPara(textOf(td), { color: ci === 0 ? DX.ink : DX.inkSoft, bold: ci === 0 || isTotal, size: 17 })],
+      })),
+    });
+  });
+  return [new docx.Table({ rows: [headerRow, ...dataRows], width: { size: 100, type: docx.WidthType.PERCENTAGE } })];
+}
+
+function dxKpiRowFromEls(els) {
+  return dxKpiRow(els.map((el) => ({ value: textOf(el.querySelector('.v')), label: textOf(el.querySelector('.l')), sub: textOf(el.querySelector('.s')) })));
+}
+function dxStatRowFromEls(els) {
+  return dxStatRow(els.map((el) => ({ value: textOf(el.querySelector('.v')), label: textOf(el.querySelector('.l')), sub: textOf(el.querySelector('.s')) })));
+}
+function dxStatBoxRowFromEls(els) {
+  return dxStatBoxRow(els.map((el) => ({ value: textOf(el.querySelector('.v')), label: textOf(el.querySelector('.l')) })));
+}
+function dxLabelValueRowFromEls(els, valueSel) {
+  return dxLabelValueRow(els.map((el) => ({
+    label: textOf(el.querySelector('.l')),
+    value: textOf(el.querySelector(valueSel || '.v')),
+    sub: textOf(el.querySelector('.sub')),
+  })));
+}
+function dxBarChartFromEl(chartEl) {
+  const cols = Array.from(chartEl.querySelectorAll('.wk-bar-col'));
+  return dxBarChart(cols.map((col) => {
+    const valueLabel = textOf(col.querySelector('.wk-bar-num'));
+    return {
+      label: textOf(col.querySelector('.wk-bar-label')),
+      sub: textOf(col.querySelector('.wk-bar-sub')),
+      value: Number(valueLabel.replace(/[^0-9.-]/g, '')) || 0,
+      valueLabel,
+      peak: !!col.querySelector('.wk-bar.peak'),
+    };
+  }));
+}
+function dxBoxFromEl(boxEl) {
   const out = [];
-  out.push(dxHeaderBlock(r.reportDate));
-  out.push(...dxSectionHeading(null, `Report for ${r.schema}`, `Operational scanning performance across ${r.summary.picklists} picklists on ${r.reportDate}.`));
-  out.push(dxStatBoxRow([
-    { value: String(r.summary.picklists), label: 'PICKLISTS' },
-    { value: String(r.summary.lineItems), label: 'LINE ITEMS' },
-    { value: r.summary.totalUnits.toLocaleString(), label: 'TOTAL UNITS' },
-    { value: r.summary.activeScanTime, label: 'ACTIVE SCAN TIME' },
-    { value: `${r.summary.itemsPerMin} /min`, label: 'LINE ITEMS / MIN' },
-    { value: `${r.summary.unitsPerMin} /min`, label: 'UNITS / MIN' },
-  ]));
-  out.push(dxGap(180));
-  out.push(dxBullet([{ text: 'Highest Items / min → ' }, { text: `${r.summary.highestItemsPerMin} items / min`, bold: true, color: DX.ink }]));
-  out.push(dxBullet([{ text: 'Highest Units / min → ' }, { text: `${r.summary.highestUnitsPerMin} units / min`, bold: true, color: DX.ink }]));
+  const title = boxEl.querySelector('.wk-box-title');
+  if (title) out.push(dxPara(textOf(title), { bold: true, color: DX.accent, size: 15, spacing: { after: 80 } }));
+  boxEl.querySelectorAll('ul.bullets > li').forEach((li) => out.push(dxRuns(segmentsFromNode(li), { color: DX.inkSoft, size: 19, spacing: { after: 80 }, bullet: { level: 0 } })));
+  boxEl.querySelectorAll(':scope > .wk-kv').forEach((kv) => {
+    out.push(dxRuns([
+      { text: `${textOf(kv.querySelector('.l'))}: `, color: DX.muted },
+      { text: textOf(kv.querySelector('.v')), bold: true, color: DX.ink },
+    ], { size: 18, spacing: { after: 40 } }));
+  });
+  return out;
+}
+function dxBannerFromEl(bannerEl) {
+  const tag = textOf(bannerEl.querySelector('.tag'));
+  const clone = bannerEl.cloneNode(true);
+  const tagClone = clone.querySelector('.tag');
+  if (tagClone) tagClone.remove();
+  return dxBanner(tag, segmentsFromNode(clone));
+}
+function dxFooterFromEl(footerEl) {
+  const spans = footerEl.querySelectorAll('span');
+  return dxFooter(textOf(spans[0]), textOf(spans[1]));
+}
 
-  out.push(dxH2('Picklist Details'));
-  out.push(...dxTable(r.picklists, [
-    { header: 'Picklist Number', render: (p) => p.picklistNumber },
-    { header: 'Line items', render: (p) => p.lineItems },
-    { header: 'Total Unit', render: (p) => p.totalUnit.toLocaleString() },
-    { header: 'Scan Time', render: (p) => p.scanTime },
-    { header: 'Line item/ Min', render: (p) => p.itemsPerMin },
-    { header: 'units/ min', render: (p) => p.unitsPerMin },
-  ], { rank: true, padRank: false }));
-  if (r.picklists.length > 0) {
-    out.push(dxPara(`TOTAL: ${r.summary.lineItems} line items, ${r.summary.totalUnits.toLocaleString()} units, ${r.summary.activeScanTime} active scan time, ${r.summary.itemsPerMin} items/min, ${r.summary.unitsPerMin} units/min.`, { bold: true, color: DX.ink, size: 17, spacing: { before: 100 } }));
+function walkReportNode(el, out, state) {
+  if (!el.classList) { Array.from(el.children || []).forEach((c) => walkReportNode(c, out, state)); return; }
+  if (el.classList.contains('wk-page')) {
+    if (state.pageStarted) out.push(dxPageBreak());
+    state.pageStarted = true;
+    Array.from(el.children).forEach((c) => walkReportNode(c, out, state));
+    return;
   }
+  if (el.classList.contains('letterhead')) {
+    out.push(dxHeaderBlock(textOf(el.querySelector('.doc-date')).replace(/^Date:\s*/, '')));
+    return;
+  }
+  if (el.tagName === 'H1') { out.push(dxPara(textOf(el), { bold: true, color: DX.ink, size: 34, spacing: { after: 80 } })); return; }
+  if (el.tagName === 'H2') { out.push(dxH2(textOf(el))); return; }
+  if (el.classList.contains('wk-eyebrow')) { out.push(dxPara(textOf(el), { bold: true, color: DX.accent, size: 15, spacing: { after: 60 } })); return; }
+  if (el.classList.contains('subtitle') || el.classList.contains('wk-subtitle')) { out.push(dxRuns(segmentsFromNode(el), { color: DX.inkSoft, size: 20, spacing: { after: 220 } })); return; }
+  if (el.classList.contains('wk-sec-note')) { out.push(dxSecNote(textOf(el))); return; }
+  if (el.classList.contains('wk-table-title')) { out.push(dxPara(textOf(el), { bold: true, color: DX.accent, size: 14, spacing: { before: 120, after: 40 } })); return; }
+  if (el.classList.contains('wk-kpis')) { out.push(dxKpiRowFromEls(Array.from(el.querySelectorAll('.wk-kpi')))); out.push(dxGap()); return; }
+  if (el.classList.contains('wk-stats')) { out.push(dxStatRowFromEls(Array.from(el.querySelectorAll('.wk-stat')))); out.push(dxGap()); return; }
+  if (el.classList.contains('stats')) { out.push(dxStatBoxRowFromEls(Array.from(el.querySelectorAll('.stat')))); out.push(dxGap()); return; }
+  if (el.classList.contains('workload')) { out.push(dxLabelValueRowFromEls(Array.from(el.querySelectorAll('.wl-box')), '.id')); out.push(dxGap()); return; }
+  if (el.classList.contains('config')) { out.push(dxLabelValueRowFromEls(Array.from(el.querySelectorAll('.cfg')))); out.push(dxGap()); return; }
+  if (el.classList.contains('wk-chart')) { out.push(dxBarChartFromEl(el)); out.push(dxGap()); return; }
+  if (el.classList.contains('wk-box')) { out.push(...dxBoxFromEl(el)); return; }
+  if (el.tagName === 'UL' && el.classList.contains('bullets')) {
+    Array.from(el.children).forEach((li) => out.push(dxRuns(segmentsFromNode(li), { color: DX.inkSoft, size: 19, spacing: { after: 80 }, bullet: { level: 0 } })));
+    return;
+  }
+  if (el.tagName === 'TABLE') { out.push(...dxTableFromEl(el)); return; }
+  if (el.classList.contains('wk-banner')) { out.push(dxGap(220)); out.push(dxBannerFromEl(el)); return; }
+  if (el.tagName === 'FOOTER') { out.push(dxFooterFromEl(el)); return; }
+  Array.from(el.children).forEach((c) => walkReportNode(c, out, state));
+}
 
-  out.push(dxH2('Scanner metrics'));
-  out.push(...dxTable(r.scannerMetrics, [
-    { header: 'Scanner name', render: (x) => x.scannerName || x.deviceId },
-    { header: 'Checker name', render: (x) => x.checkerName },
-    { header: 'Total Units', render: (x) => x.totalUnits.toLocaleString() },
-    { header: 'Line Items', render: (x) => x.lineItems },
-    { header: 'Scan Time', render: (x) => x.scanTime },
-    { header: 'Units / Min', render: (x) => x.unitsPerMin },
-    { header: 'Line Items / Min', render: (x) => x.itemsPerMin },
-  ], { rank: true, padRank: false, rightAlignFrom: 3 }));
-
-  out.push(dxH2('Scanning Coverage'));
-  out.push(...dxTable([
-    { m: 'Total Lines Assigned', v: cov.totalLinesAssigned.toLocaleString() },
-    { m: 'Lines Completed', v: cov.linesCompleted.toLocaleString() },
-    { m: 'Remaining Lines', v: cov.remainingLines.toLocaleString() },
-    { m: 'Completed Percentage', v: `${cov.lineCoveragePct}%` },
-  ], [{ header: 'Metric', render: (x) => x.m }, { header: 'Lines', render: (x) => x.v }]));
-  out.push(dxBullet([{ text: `${cov.totalLinesAssigned.toLocaleString()} total lines were assigned at ${r.schema} today, of which ${cov.linesCompleted.toLocaleString()} lines were completed using Zander Checking App, achieving ${cov.lineCoveragePct}% line coverage.` }]));
-
-  out.push(dxH2('Performance Highlights'));
-  out.push(dxBullet([{ text: `${cov.picklistsCompleted} picklists were completed today; ${cov.picklistsAssigned - cov.picklistsCompleted} more remain assigned or checked.` }]));
-  out.push(dxBullet([{ text: `${r.summary.activeScanTime} of total active scan time was recorded on completed picklists.` }]));
-  out.push(dxBullet([{ text: 'Overall throughput was ' }, { text: `${r.summary.unitsPerMin} units/minute`, bold: true, color: DX.ink }, { text: '.' }]));
-  out.push(dxBullet([{ text: 'Overall line-item processing rate was ' }, { text: `${r.summary.itemsPerMin} line items/minute`, bold: true, color: DX.ink }, { text: '.' }]));
-  if (wl.largestPicklist) out.push(dxBullet([{ text: 'The largest individual picklist contained ' }, { text: `${wl.largestPicklist.units.toLocaleString()} units`, bold: true, color: DX.ink }, { text: ` (${wl.largestPicklist.picklistNumber}).` }]));
-
-  out.push(dxH2('Workload Profile'));
-  out.push(dxLabelValueRow([
-    { label: 'LARGEST PICKLIST', value: wl.largestPicklist ? wl.largestPicklist.picklistNumber : '-', accent: true, sub: wl.largestPicklist ? `${wl.largestPicklist.units.toLocaleString()} units` : '' },
-    { label: 'HIGHEST LINE-ITEM COUNT', value: wl.mostLineItems ? wl.mostLineItems.picklistNumber : '-', accent: true, sub: wl.mostLineItems ? `${wl.mostLineItems.lineItems} line items` : '' },
-  ]));
-
-  out.push(dxH2('Session Configuration'));
-  out.push(dxLabelValueRow([
-    { label: 'SCANNERS', value: String(r.scannerMetrics.length) },
-    { label: 'PICKLISTS', value: `${cov.picklistsCompleted} completed / ${cov.picklistsAssigned} assigned` },
-    { label: 'REPORT DATE', value: r.reportDate },
-  ]));
-  out.push(dxGap(100));
-  out.push(dxLabelValueRow([
-    { label: 'LOCATION / CUSTOMER', value: r.schema },
-    { label: 'SCAN TIME', value: 'Active scanning time only; idle periods excluded.' },
-  ]));
-  out.push(dxGap(200));
-  out.push(dxFooter('Zander · Supply Chain Intelligence', `${r.schema} Scan Report | ${r.reportDate}`));
-
+function buildDocxFromSheet(sheetElement) {
+  const out = [];
+  const state = { pageStarted: false };
+  Array.from(sheetElement.children).forEach((c) => walkReportNode(c, out, state));
   return out;
 }
 
@@ -1622,7 +1464,7 @@ async function exportSheetAsDocx(filename) {
   const doc = new docx.Document({
     sections: [{
       properties: { page: { margin: { top: 720, bottom: 720, left: 720, right: 720 } } },
-      children: buildDailyDocxSections(loadedDailyData),
+      children: buildDocxFromSheet(sheetEl),
     }],
   });
   triggerBlobDownload(await docx.Packer.toBlob(doc), filename);
@@ -1632,7 +1474,7 @@ async function exportWeeklyDocx(filename) {
   const doc = new docx.Document({
     sections: [{
       properties: { page: { margin: { top: 720, bottom: 720, left: 720, right: 720 } } },
-      children: buildWeeklyDocxSections(loadedWeeklyData),
+      children: buildDocxFromSheet(sheetEl),
     }],
   });
   triggerBlobDownload(await docx.Packer.toBlob(doc), filename);
