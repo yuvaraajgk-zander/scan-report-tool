@@ -111,8 +111,13 @@ agg AS (
            COALESCE(SUM(line_items), 0) AS line_items,
            COALESCE(SUM(total_quantity), 0) AS total_units,
            COALESCE(SUM(scan_seconds), 0)::bigint AS total_scan_seconds,
-           COALESCE(MAX(items_per_min), 0) AS highest_items_per_min,
-           COALESCE(MAX(units_per_min), 0) AS highest_units_per_min
+           -- MAX() over EVERY completed picklist's own rate let one
+           -- barely-scanned picklist (e.g. 1 line item in 2s) produce a
+           -- "highest rate" nobody could sustain. Restricted to picklists
+           -- with at least 60s of actual scan time, so "highest" reflects
+           -- a real sustained pace, not noise from a tiny sample.
+           COALESCE(MAX(items_per_min) FILTER (WHERE scan_seconds >= 60), 0) AS highest_items_per_min,
+           COALESCE(MAX(units_per_min) FILTER (WHERE scan_seconds >= 60), 0) AS highest_units_per_min
     FROM rates
 )
 SELECT 'totalUnits' AS key, total_units::text AS value FROM agg
@@ -203,10 +208,31 @@ line_item_agg AS (
     LEFT JOIN tbl_invoice_line_item li ON li.transno = inv.invoice_number
     GROUP BY inv.group_picklist_number
 ),
+-- One scanner (device_id) can be used by more than one checker in a day -
+-- grouping by device_id + checker produced one row per device PER CHECKER,
+-- so a shared scanner showed up as multiple "duplicate" rows under the same
+-- device name. This report is one row per physical scanner, so device_id is
+-- the only real grouping key; per_checker below is kept as its own
+-- aggregation purely to pick a representative checker name (the one with
+-- the most line items on that device that day) to display, not to split
+-- the row.
+per_checker AS (
+    SELECT t.device_id, t.scanned_by,
+           COALESCE(TRIM(CONCAT(u.first_name, ' ', u.last_name)), t.scanned_by) AS checker_name,
+           SUM(COALESCE(la.line_items, 0))::int AS checker_line_items
+    FROM tray_agg t
+    LEFT JOIN line_item_agg la ON la.group_picklist_number = t.group_picklist_number
+    LEFT JOIN tbl_user u ON u.user_id = t.scanned_by
+    GROUP BY t.device_id, t.scanned_by, u.first_name, u.last_name
+),
+top_checker AS (
+    SELECT DISTINCT ON (device_id) device_id, checker_name
+    FROM per_checker
+    ORDER BY device_id, checker_line_items DESC
+),
 agg AS (
     SELECT t.device_id,
            COALESCE(d.device_name, t.device_id) AS device_name,
-           COALESCE(TRIM(CONCAT(u.first_name, ' ', u.last_name)), t.scanned_by) AS checker_name,
            SUM(COALESCE(la.line_items, 0))::int AS total_line_items,
            SUM(COALESCE(la.total_quantity, 0))::int AS total_quantity,
            COALESCE(SUM(t.duration_seconds), 0)::bigint AS raw_duration_seconds,
@@ -214,24 +240,24 @@ agg AS (
     FROM tray_agg t
     LEFT JOIN line_item_agg la ON la.group_picklist_number = t.group_picklist_number
     LEFT JOIN tbl_device d ON d.device_id = t.device_id
-    LEFT JOIN tbl_user u ON u.user_id = t.scanned_by
-    GROUP BY t.device_id, d.device_name, t.scanned_by, u.first_name, u.last_name
+    GROUP BY t.device_id, d.device_name
 ),
 -- If the idle-time-adjusted duration makes this scanner's rate implausibly
 -- high (idle_time_seconds is likely bad/missing for that data), fall back
 -- to the raw, un-adjusted duration instead of trusting the subtraction.
 corrected AS (
-    SELECT device_id, device_name, checker_name, total_line_items, total_quantity,
+    SELECT a.device_id, a.device_name, tc.checker_name, a.total_line_items, a.total_quantity,
            CASE
-             WHEN idle_adjusted_seconds > 0
+             WHEN a.idle_adjusted_seconds > 0
                   AND (
-                    total_quantity::numeric / (idle_adjusted_seconds::numeric / 60.0) > 150
-                    OR total_line_items::numeric / (idle_adjusted_seconds::numeric / 60.0) > 40
+                    a.total_quantity::numeric / (a.idle_adjusted_seconds::numeric / 60.0) > 150
+                    OR a.total_line_items::numeric / (a.idle_adjusted_seconds::numeric / 60.0) > 40
                   )
-             THEN raw_duration_seconds
-             ELSE idle_adjusted_seconds
+             THEN a.raw_duration_seconds
+             ELSE a.idle_adjusted_seconds
            END AS net_duration_seconds
-    FROM agg
+    FROM agg a
+    LEFT JOIN top_checker tc ON tc.device_id = a.device_id
 )
 SELECT
     ROW_NUMBER() OVER (ORDER BY device_id, total_line_items DESC) AS "#",

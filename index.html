@@ -223,8 +223,8 @@ function renderReport(r) {
       <div class="stat"><div class="v">${r.summary.totalUnits.toLocaleString()}</div><div class="l">TOTAL UNITS</div></div>
       <div class="stat"><div class="v">${r.summary.picklists}</div><div class="l">PICKLISTS</div></div>
       <div class="stat"><div class="v">${r.summary.lineItems}</div><div class="l">LINE ITEMS</div></div>
-      <div class="stat"><div class="v">${r.summary.unitsPerMin} /min</div><div class="l">UNITS / MIN</div></div>
-      <div class="stat"><div class="v">${r.summary.itemsPerMin} /min</div><div class="l">LINE ITEMS / MIN</div></div>
+      <div class="stat"><div class="v">${r.summary.unitsPerMin} /min</div><div class="l">AVG UNITS / MIN</div></div>
+      <div class="stat"><div class="v">${r.summary.itemsPerMin} /min</div><div class="l">AVG LINE ITEMS / MIN</div></div>
       <div class="stat"><div class="v">${esc(r.summary.activeScanTime)}</div><div class="l">ACTIVE SCAN TIME</div></div>
     </div>
 
@@ -267,7 +267,7 @@ function renderReport(r) {
 
     <h2>Performance Highlights</h2>
     <ul class="bullets">
-      <li>${cov.picklistsCompleted} picklists were completed today; ${cov.picklistsAssigned - cov.picklistsCompleted} more remain assigned or checked.</li>
+      <li>${cov.picklistsCompleted} picklists were completed today.</li>
       <li>${esc(r.summary.activeScanTime)} of total active scan time was recorded on completed picklists.</li>
       <li>Overall throughput was <b>${r.summary.unitsPerMin} units/minute</b>.</li>
       <li>Overall line-item processing rate was <b>${r.summary.itemsPerMin} line items/minute</b>.</li>
@@ -283,10 +283,9 @@ function renderReport(r) {
     <h2>Session Configuration</h2>
     <div class="config">
       <div class="cfg"><div class="l">Scanners</div><div class="v">${r.scannerMetrics.length}</div></div>
-      <div class="cfg"><div class="l">Picklists</div><div class="v">${cov.picklistsCompleted} completed / ${cov.picklistsAssigned} assigned</div></div>
+      <div class="cfg"><div class="l">Picklists</div><div class="v">${cov.picklistsCompleted} completed</div></div>
       <div class="cfg"><div class="l">Report Date</div><div class="v">${esc(r.reportDate)}</div></div>
       <div class="cfg"><div class="l">Location / Customer</div><div class="v">${esc(r.schema)}</div></div>
-      <div class="cfg"><div class="l">Scan Time</div><div class="v">Active scanning time only; idle periods excluded.</div></div>
     </div>
 
     <footer><span>Zander · Supply Chain Intelligence</span><span>${esc(r.schema)} Scan Report | ${esc(r.reportDate)}</span></footer>
